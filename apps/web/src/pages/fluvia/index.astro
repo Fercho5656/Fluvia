@@ -1,0 +1,21 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import WorkspaceDashboard from "../../components/fluvia/WorkspaceDashboard.vue";
+import { createClient } from "../../lib/orpc";
+
+// Only authenticated users can access this
+const user = Astro.locals.user;
+if (!user) {
+  return Astro.redirect("/login");
+}
+
+// Fetch initial data on the server
+const client = createClient(Astro.request.headers);
+const initialWorkspaces = await client.fluvia.workspace.list();
+---
+
+<Layout title="Fluvia - Agency Command">
+  <main class="mx-auto max-w-7xl px-4 py-12 md:px-8">
+    <WorkspaceDashboard client:load initialWorkspaces={initialWorkspaces} />
+  </main>
+</Layout>
