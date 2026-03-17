@@ -1,8 +1,66 @@
 @import "tailwindcss";
 
-/* Add your theme customizations here. */
-/* See the TailwindCSS v4 docs for more info: https://tailwindcss.com/docs/v4-beta */
-
 @theme {
   --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Fluvia Palette: Electric Indigo & Steel Slate */
+  --color-background: oklch(14.5% 0.02 264); /* Deep Slate */
+  --color-foreground: oklch(98% 0.01 264);
+
+  --color-primary: oklch(55% 0.25 264); /* Electric Indigo */
+  --color-primary-foreground: oklch(100% 0 0);
+
+  --color-secondary: oklch(25% 0.03 264);
+  --color-secondary-foreground: oklch(90% 0.02 264);
+
+  --color-muted: oklch(20% 0.02 264);
+  --color-muted-foreground: oklch(65% 0.02 264);
+
+  --color-accent: oklch(70% 0.15 190); /* Cyan for "active" status */
+  --color-accent-foreground: oklch(14.5% 0.02 264);
+
+  --color-border: oklch(22% 0.02 264);
+  --color-ring: oklch(55% 0.25 264);
+
+  --color-card: oklch(17% 0.02 264);
+  --color-card-foreground: oklch(98% 0.01 264);
+
+  /* Elevation Levels (Whisper-quiet shifts) */
+  --color-surface-base: oklch(14.5% 0.02 264);
+  --color-surface-elevated: oklch(17% 0.02 264);
+  --color-surface-highest: oklch(20% 0.02 264);
+
+  --radius-lg: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.25rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+  }
+
+  /* Signature: Flow-to-JSON Terminal Style */
+  .terminal-view {
+    @apply font-mono text-sm leading-relaxed p-4 rounded-lg bg-black/40 border border-white/5;
+  }
+
+  .terminal-view .key {
+    @apply text-primary;
+  }
+  .terminal-view .string {
+    @apply text-accent;
+  }
+  .terminal-view .number {
+    @apply text-orange-400;
+  }
+}
+
+@utility glass-panel {
+  @apply bg-white/5 border border-white/10 backdrop-blur-sm;
 }
