@@ -47,7 +47,7 @@
     "typescript": "catalog:"
   },
   "lint-staged": {
-    "*": [
+    "**/*.{js,ts,vue,astro}": [
       "oxlint",
       "oxfmt --write"
     ]

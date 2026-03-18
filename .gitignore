@@ -49,3 +49,10 @@ coverage
 .cache
 tmp
 temp
+
+# Gemini
+settings.json
+
+# Supabase
+_current_branch
+cli-latest
