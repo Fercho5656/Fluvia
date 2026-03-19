@@ -217,7 +217,7 @@ const stats = computed(() => [
                 </div>
 
                 <a
-                  :href="`/fluvia/${ws.id}/designer?serverId=${srv.id}`"
+                  :href="`/dashboard/${ws.id}/designer?serverId=${srv.id}`"
                   class="bg-white/5 hover:bg-white/10 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all whitespace-nowrap border border-white/5"
                 >
                   Configure
@@ -249,7 +249,7 @@ const stats = computed(() => [
           </span>
           <div class="flex items-center gap-4">
             <a
-              :href="`/fluvia/${ws.id}`"
+              :href="`/dashboard/${ws.id}`"
               class="text-xs font-medium text-white/50 hover:text-white transition-colors flex items-center gap-1"
             >
               Details

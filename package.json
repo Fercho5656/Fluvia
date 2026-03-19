@@ -49,7 +49,7 @@
   "lint-staged": {
     "**/*.{js,ts,vue,astro}": [
       "oxlint",
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ]
   },
   "packageManager": "bun@1.3.10"
