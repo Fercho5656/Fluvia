@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { orpc } from "../../../lib/orpc";
+import { orpc } from "@/lib/orpc";
 import {
   Send,
   Terminal,
@@ -11,7 +11,7 @@ import {
   RefreshCcw,
   Sparkles,
 } from "lucide-vue-next";
-import { cn } from "../../../lib/utils";
+import { cn } from "@/lib/utils";
 
 const props = defineProps<{
   workspaceId: string;
