@@ -7,6 +7,7 @@ interface Props {
 }
 
 const { title = "my-better-t-app" } = Astro.props;
+const user = Astro.locals.user;
 ---
 
 <!doctype html>
@@ -18,8 +19,8 @@ const { title = "my-better-t-app" } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
   </head>
-  <body class="min-h-screen bg-neutral-950 text-white">
-    <Header />
+  <body class="min-h-screen bg-neutral-950 text-white selection:bg-primary/30 selection:text-primary-foreground">
+    <Header user={user} />
     <slot />
   </body>
 </html>
