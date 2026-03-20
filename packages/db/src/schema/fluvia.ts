@@ -2,7 +2,12 @@ import { relations } from "drizzle-orm";
 import { pgTable, text, timestamp, pgEnum, jsonb, index } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
-export const serverStatusEnum = pgEnum("server_status", ["provisioning", "active", "error"]);
+export const serverStatusEnum = pgEnum("server_status", [
+  "provisioning",
+  "active",
+  "stopped",
+  "error",
+]);
 export const workflowStatusEnum = pgEnum("workflow_status", ["draft", "active", "error"]);
 
 /**
