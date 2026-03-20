@@ -15,6 +15,8 @@ import {
   Trash2,
   RefreshCcw,
   MoreVertical,
+  X,
+  Check,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +29,10 @@ const loading = ref(!props.initialWorkspaces);
 const creating = ref(false);
 const newWorkspaceName = ref("");
 const activeMenuId = ref<string | null>(null);
+
+// Workspace Edit state
+const editingWorkspaceId = ref<string | null>(null);
+const editNameValue = ref("");
 
 async function fetchWorkspaces() {
   try {
@@ -65,6 +71,37 @@ async function provisionServer(workspaceId: string) {
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to provision server:", error);
+  }
+}
+
+// Workspace Actions
+function startEditing(ws: any) {
+  editingWorkspaceId.value = ws.id;
+  editNameValue.value = ws.name;
+}
+
+async function saveWorkspaceName() {
+  if (!editingWorkspaceId.value || !editNameValue.value) return;
+  try {
+    await orpc.fluvia.workspace.update({
+      id: editingWorkspaceId.value,
+      name: editNameValue.value,
+    });
+    editingWorkspaceId.value = null;
+    await fetchWorkspaces();
+  } catch (error) {
+    console.error("Failed to update workspace:", error);
+  }
+}
+
+async function deleteWorkspace(id: string) {
+  if (!confirm("Are you sure? This will delete the workspace and ALL associated servers and data."))
+    return;
+  try {
+    await orpc.fluvia.workspace.delete({ id });
+    await fetchWorkspaces();
+  } catch (error) {
+    console.error("Failed to delete workspace:", error);
   }
 }
 
@@ -201,19 +238,53 @@ const stats = computed(() => [
       >
         <div class="p-6 space-y-6">
           <div class="flex items-start justify-between">
-            <div class="space-y-1">
-              <h3 class="text-xl font-bold text-white group-hover:text-primary transition-colors">
+            <div class="space-y-1 flex-1 min-w-0">
+              <div v-if="editingWorkspaceId === ws.id" class="flex items-center gap-2 mr-4">
+                <input
+                  v-model="editNameValue"
+                  class="bg-black/20 border border-primary/50 rounded px-2 py-1 text-lg font-bold text-white w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                  @keyup.enter="saveWorkspaceName"
+                  @keyup.esc="editingWorkspaceId = null"
+                  auto-focus
+                />
+                <button
+                  @click="saveWorkspaceName"
+                  class="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded"
+                >
+                  <Check class="size-4" />
+                </button>
+                <button
+                  @click="editingWorkspaceId = null"
+                  class="p-1 text-rose-400 hover:bg-rose-400/10 rounded"
+                >
+                  <X class="size-4" />
+                </button>
+              </div>
+              <h3
+                v-else
+                class="text-xl font-bold text-white group-hover:text-primary transition-colors truncate"
+              >
                 {{ ws.name }}
               </h3>
+
               <p class="text-xs font-mono text-muted-foreground tracking-widest uppercase">
                 ID: {{ ws.id.slice(0, 8) }}
               </p>
             </div>
-            <div class="flex gap-2">
+            <div class="flex gap-1">
               <button
+                @click="startEditing(ws)"
                 class="p-2 hover:bg-white/5 rounded-lg text-muted-foreground transition-colors"
+                title="Edit Name"
               >
                 <Settings class="size-4" />
+              </button>
+              <button
+                @click="deleteWorkspace(ws.id)"
+                class="p-2 hover:bg-rose-500/10 rounded-lg text-muted-foreground hover:text-rose-500 transition-colors"
+                title="Delete Client"
+              >
+                <Trash2 class="size-4" />
               </button>
             </div>
           </div>

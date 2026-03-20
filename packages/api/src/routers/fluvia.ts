@@ -40,6 +40,25 @@ export const fluviaRouter = {
         });
         return { id };
       }),
+
+    update: protectedProcedure
+      .input(z.object({ id: z.string(), name: z.string().min(1) }))
+      .handler(async ({ input, context }) => {
+        await db
+          .update(workspace)
+          .set({ name: input.name, updatedAt: new Date() })
+          .where(and(eq(workspace.id, input.id), eq(workspace.agencyId, context.session.user.id)));
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .handler(async ({ input, context }) => {
+        await db
+          .delete(workspace)
+          .where(and(eq(workspace.id, input.id), eq(workspace.agencyId, context.session.user.id)));
+        return { success: true };
+      }),
   },
 
   server: {
