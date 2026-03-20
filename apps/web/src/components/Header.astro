@@ -5,7 +5,12 @@ interface Props {
 
 const { user } = Astro.props;
 
-const links = [{ to: "/dashboard", label: "Dashboard" }];
+const links = [
+  { to: "/", label: "Home" },
+  { to: "/dashboard", label: "Agency Command" },
+  { to: "/dashboard/designer", label: "AI Designer" },
+  { to: "/dashboard/workflows", label: "My Blueprints" },
+];
 ---
 
 <div class="sticky top-0 z-50 glass-panel border-x-0 border-t-0">

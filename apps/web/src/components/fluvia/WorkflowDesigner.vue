@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { orpc } from "@/lib/orpc";
 import {
-  Send,
   Terminal,
   CloudUpload,
   Loader2,
@@ -10,34 +9,61 @@ import {
   Cpu,
   RefreshCcw,
   Sparkles,
+  Save,
+  ChevronDown,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
 const props = defineProps<{
-  workspaceId: string;
-  serverId: string;
+  initialWorkflowId?: string;
 }>();
 
 const prompt = ref("");
 const isGenerating = ref(false);
+const isSaving = ref(false);
 const isDeploying = ref(false);
-const generatedWorkflow = ref<any>(null);
+const generatedJson = ref<any>(null);
+const workflowName = ref("New AI Workflow");
+const savedWorkflowId = ref(props.initialWorkflowId || null);
+
+// Deployment state
+const workspaces = ref<any[]>([]);
+const selectedServerId = ref("");
+const showDeployMenu = ref(false);
 const deploySuccess = ref(false);
+
+async function fetchInitialData() {
+  if (savedWorkflowId.value) {
+    try {
+      const wf = await orpc.fluvia.customWorkflow.get({ id: savedWorkflowId.value });
+      generatedJson.value = wf.n8nJson;
+      workflowName.value = wf.name;
+      prompt.value = wf.description || "";
+    } catch (e) {
+      console.error("Failed to fetch workflow:", e);
+    }
+  }
+
+  try {
+    workspaces.value = await orpc.fluvia.workspace.list();
+  } catch (e) {
+    console.error("Failed to fetch servers:", e);
+  }
+}
 
 async function generateWorkflow() {
   if (!prompt.value || isGenerating.value) return;
 
   isGenerating.value = true;
-  generatedWorkflow.value = null;
+  generatedJson.value = null;
   deploySuccess.value = false;
 
   try {
     const result = await orpc.fluvia.workflow.generate({
-      serverId: props.serverId,
       prompt: prompt.value,
-      name: `AI: ${prompt.value.slice(0, 20)}...`,
+      name: workflowName.value,
     });
-    generatedWorkflow.value = result;
+    generatedJson.value = result.n8nJson;
   } catch (error) {
     console.error("Generation failed:", error);
   } finally {
@@ -45,15 +71,51 @@ async function generateWorkflow() {
   }
 }
 
-async function deployWorkflow() {
-  if (!generatedWorkflow.value || isDeploying.value) return;
+async function saveBlueprint() {
+  if (!generatedJson.value || isSaving.value) return;
+
+  isSaving.value = true;
+  try {
+    if (savedWorkflowId.value) {
+      await orpc.fluvia.customWorkflow.update({
+        id: savedWorkflowId.value,
+        name: workflowName.value,
+        n8nJson: generatedJson.value,
+        description: prompt.value,
+      });
+    } else {
+      const result = await orpc.fluvia.customWorkflow.create({
+        name: workflowName.value,
+        n8nJson: generatedJson.value,
+        description: prompt.value,
+      });
+      savedWorkflowId.value = result.id;
+    }
+  } catch (error) {
+    console.error("Save failed:", error);
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+async function deployToSelectedServer() {
+  if (!selectedServerId.value || !generatedJson.value || isDeploying.value) return;
+
+  // Auto-save before deploy if it's new
+  if (!savedWorkflowId.value) {
+    await saveBlueprint();
+  }
 
   isDeploying.value = true;
   try {
     await orpc.fluvia.workflow.deploy({
-      workflowId: generatedWorkflow.value.id,
+      serverId: selectedServerId.value,
+      customWorkflowId: savedWorkflowId.value!,
+      name: workflowName.value,
+      n8nJson: generatedJson.value,
     });
     deploySuccess.value = true;
+    showDeployMenu.value = false;
   } catch (error) {
     console.error("Deployment failed:", error);
   } finally {
@@ -61,19 +123,39 @@ async function deployWorkflow() {
   }
 }
 
-// Helper to highlight JSON (Simple for prototype)
 function formatJson(json: any) {
   return JSON.stringify(json, null, 2);
 }
+
+onMounted(fetchInitialData);
 </script>
 
 <template>
   <div class="h-[calc(100vh-12rem)] flex flex-col gap-6">
-    <!-- Breadcrumbs -->
-    <div class="flex items-center gap-2 text-sm text-muted-foreground">
-      <a href="/fluvia" class="hover:text-white transition-colors">Workspaces</a>
-      <span>/</span>
-      <span class="text-white font-medium">Designer</span>
+    <!-- Header/Breadcrumbs -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <a href="/dashboard" class="hover:text-white transition-colors">Dashboard</a>
+        <span>/</span>
+        <span class="text-white font-medium">AI Designer</span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <input
+          v-model="workflowName"
+          class="bg-transparent border-none text-right font-bold text-white focus:ring-0 placeholder:text-white/20"
+          placeholder="Workflow Name..."
+        />
+        <button
+          @click="saveBlueprint"
+          :disabled="!generatedJson || isSaving"
+          class="bg-surface-elevated border border-border px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-surface-highest transition-all"
+        >
+          <Loader2 v-if="isSaving" class="size-4 animate-spin" />
+          <Save v-else class="size-4" />
+          {{ savedWorkflowId ? "Update Blueprint" : "Save Blueprint" }}
+        </button>
+      </div>
     </div>
 
     <div class="flex-1 flex gap-6 min-h-0">
@@ -88,15 +170,14 @@ function formatJson(json: any) {
             </div>
             <h2 class="text-2xl font-bold text-white tracking-tight">AI Workflow Agent</h2>
             <p class="text-sm text-muted-foreground">
-              Describe the automation you want to build in plain English. Our agent will translate
-              it into a production-ready n8n workflow.
+              Describe your business logic. We'll generate a production-ready blueprint.
             </p>
           </div>
 
           <div class="flex-1 flex flex-col gap-4">
             <textarea
               v-model="prompt"
-              placeholder="e.g. When a new row is added to my Google Sheet, send a summary message to the #operations Slack channel."
+              placeholder="e.g. When a new row is added to Google Sheets, send a Slack message..."
               class="flex-1 bg-black/20 border border-white/10 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none placeholder:text-muted-foreground/50 transition-all"
             ></textarea>
 
@@ -107,29 +188,8 @@ function formatJson(json: any) {
             >
               <Loader2 v-if="isGenerating" class="size-4 animate-spin" />
               <Cpu v-else class="size-4" />
-              {{ isGenerating ? "Generating Flow..." : "Generate n8n Workflow" }}
+              Generate Blueprint
             </button>
-          </div>
-
-          <div class="bg-primary/5 rounded-xl p-4 border border-primary/10">
-            <h4 class="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-              Capabilities
-            </h4>
-            <ul class="space-y-2">
-              <li
-                v-for="cap in [
-                  'HTTP Request handling',
-                  'Database CRUD operations',
-                  'Third-party API integrations',
-                  'Conditional logic (IF/Else)',
-                ]"
-                :key="cap"
-                class="text-xs text-muted-foreground flex items-center gap-2"
-              >
-                <div class="size-1 rounded-full bg-primary/40"></div>
-                {{ cap }}
-              </li>
-            </ul>
           </div>
         </div>
       </div>
@@ -139,36 +199,27 @@ function formatJson(json: any) {
         <div
           class="flex-1 bg-surface-elevated border border-border rounded-2xl overflow-hidden flex flex-col"
         >
-          <!-- Terminal Header -->
           <div
             class="bg-black/40 px-4 py-3 border-b border-border flex items-center justify-between"
           >
             <div class="flex items-center gap-2">
-              <div class="flex gap-1.5 mr-2">
-                <div class="size-2.5 rounded-full bg-rose-500/50"></div>
-                <div class="size-2.5 rounded-full bg-orange-400/50"></div>
-                <div class="size-2.5 rounded-full bg-emerald-400/50"></div>
-              </div>
               <Terminal class="size-4 text-muted-foreground" />
-              <span class="text-xs font-mono text-muted-foreground">n8n_flow_output.json</span>
+              <span class="text-xs font-mono text-muted-foreground">n8n_blueprint.json</span>
             </div>
-
-            <div v-if="generatedWorkflow" class="flex items-center gap-2">
+            <div v-if="generatedJson" class="flex items-center gap-2">
               <button
                 @click="generateWorkflow"
-                class="text-[10px] uppercase tracking-widest font-bold text-muted-foreground hover:text-white transition-colors flex items-center gap-1"
+                class="text-[10px] uppercase font-bold text-muted-foreground hover:text-white transition-colors flex items-center gap-1"
               >
-                <RefreshCcw class="size-3" />
-                Regenerate
+                <RefreshCcw class="size-3" /> Regenerate
               </button>
             </div>
           </div>
 
-          <!-- Terminal Body -->
           <div class="flex-1 overflow-auto p-6 font-mono text-sm relative">
             <div
               v-if="isGenerating"
-              class="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[2px] z-10"
+              class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"
             >
               <div class="flex flex-col items-center gap-3">
                 <div class="flex gap-1">
@@ -181,63 +232,101 @@ function formatJson(json: any) {
                   ></div>
                 </div>
                 <span class="text-xs text-primary font-bold uppercase tracking-widest"
-                  >Compiling Nodes</span
+                  >Generating Nodes</span
                 >
               </div>
             </div>
 
-            <div v-if="generatedWorkflow" class="terminal-view whitespace-pre">
-              <pre class="text-muted-foreground">{{ formatJson(generatedWorkflow.n8nJson) }}</pre>
+            <div v-if="generatedJson" class="terminal-view whitespace-pre">
+              <pre class="text-muted-foreground">{{ formatJson(generatedJson) }}</pre>
             </div>
-
             <div
-              v-else-if="!isGenerating"
+              v-else
               class="h-full flex flex-col items-center justify-center text-center opacity-30 grayscale"
             >
               <Terminal class="size-12 mb-4" />
-              <p class="text-sm max-w-xs">
-                Waiting for AI input... The generated workflow will appear here in production-ready
-                JSON.
-              </p>
+              <p class="text-sm max-w-xs">Your AI-generated blueprint will appear here.</p>
             </div>
           </div>
 
-          <!-- Terminal Footer / Deploy Bar -->
+          <!-- Deploy Bar -->
           <div
             class="bg-black/40 px-6 py-4 border-t border-border flex items-center justify-between"
           >
             <div class="flex flex-col">
               <span class="text-[10px] text-muted-foreground font-bold uppercase tracking-widest"
-                >Deployment Status</span
+                >Deployment Target</span
               >
-              <span
-                class="text-sm font-medium"
-                :class="deploySuccess ? 'text-emerald-400' : 'text-white/50'"
-              >
-                {{
-                  deploySuccess
-                    ? "Workflow Active"
-                    : generatedWorkflow
-                      ? "Pending Deployment"
-                      : "Ready"
-                }}
-              </span>
+              <div v-if="!deploySuccess" class="relative">
+                <button
+                  @click="showDeployMenu = !showDeployMenu"
+                  class="flex items-center gap-2 text-sm font-medium text-white/80 hover:text-white"
+                >
+                  {{ selectedServerId ? "Selected Server" : "Select Target Server" }}
+                  <ChevronDown class="size-4" />
+                </button>
+
+                <!-- Simple Dropdown -->
+                <div
+                  v-if="showDeployMenu"
+                  class="absolute bottom-full left-0 mb-2 w-64 glass-panel rounded-xl overflow-hidden shadow-2xl z-50"
+                >
+                  <div
+                    v-for="ws in workspaces"
+                    :key="ws.id"
+                    class="p-2 border-b border-white/5 last:border-0"
+                  >
+                    <span class="text-[10px] uppercase font-bold text-primary px-2">{{
+                      ws.name
+                    }}</span>
+                    <button
+                      v-for="srv in ws.servers"
+                      :key="srv.id"
+                      @click="
+                        selectedServerId = srv.id;
+                        showDeployMenu = false;
+                      "
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center justify-between"
+                    >
+                      <span
+                        :class="
+                          selectedServerId === srv.id
+                            ? 'text-white font-bold'
+                            : 'text-muted-foreground'
+                        "
+                      >
+                        {{ srv.url.split("//")[1] }}
+                      </span>
+                      <div
+                        v-if="selectedServerId === srv.id"
+                        class="size-1.5 rounded-full bg-primary"
+                      ></div>
+                    </button>
+                  </div>
+                  <div v-if="workspaces.length === 0" class="p-4 text-center">
+                    <p class="text-[10px] text-muted-foreground mb-2">No servers found</p>
+                    <a href="/dashboard" class="text-[10px] text-primary font-bold uppercase"
+                      >Provision Now</a
+                    >
+                  </div>
+                </div>
+              </div>
+              <span v-else class="text-sm font-medium text-emerald-400">Deployed Successfully</span>
             </div>
 
             <button
-              v-if="generatedWorkflow && !deploySuccess"
-              @click="deployWorkflow"
-              :disabled="isDeploying"
-              class="bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-accent/20"
+              v-if="generatedJson && !deploySuccess"
+              @click="deployToSelectedServer"
+              :disabled="!selectedServerId || isDeploying"
+              class="bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all"
             >
               <Loader2 v-if="isDeploying" class="size-4 animate-spin" />
               <CloudUpload v-else class="size-4" />
               Deploy to Server
             </button>
-
             <div v-else-if="deploySuccess" class="flex items-center gap-2 text-emerald-400">
               <CheckCircle2 class="size-5" />
-              <span class="text-sm font-bold">Successfully Deployed</span>
+              <span class="text-sm font-bold">Live</span>
             </div>
           </div>
         </div>
