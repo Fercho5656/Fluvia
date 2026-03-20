@@ -17,6 +17,7 @@ import {
   MoreVertical,
   X,
   Check,
+  Pencil,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -277,7 +278,7 @@ const stats = computed(() => [
                 class="p-2 hover:bg-white/5 rounded-lg text-muted-foreground transition-colors"
                 title="Edit Name"
               >
-                <Settings class="size-4" />
+                <Pencil class="size-4" />
               </button>
               <button
                 @click="deleteWorkspace(ws.id)"
