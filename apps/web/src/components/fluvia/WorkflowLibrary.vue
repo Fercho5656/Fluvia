@@ -100,7 +100,7 @@ onMounted(fetchWorkflows);
             >
               {{ wf.name }}
             </h3>
-            <p class="text-xs text-muted-foreground line-clamp-2 min-h-[2rem] italic">
+            <p class="text-xs text-muted-foreground line-clamp-2 min-h-8 italic">
               "{{ wf.description }}"
             </p>
           </div>
