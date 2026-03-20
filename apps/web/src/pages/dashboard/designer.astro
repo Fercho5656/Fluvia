@@ -1,18 +1,23 @@
 ---
 import Layout from "@/layouts/Layout.astro";
-import WorkflowDesigner from "../../components/fluvia/WorkflowDesigner.vue";
+import WorkflowDesigner from "@/components/fluvia/WorkflowDesigner.vue";
 
-const workflowId = Astro.url.searchParams.get("id");
-
+// Auth guard for protected page
 const user = Astro.locals.user;
-
 if (!user) {
   return Astro.redirect("/login");
 }
+
+const workflowId = Astro.url.searchParams.get("id");
+const serverId = Astro.url.searchParams.get("serverId");
 ---
 
 <Layout title="AI Designer - Fluvia">
   <main class="mx-auto max-w-7xl px-4 py-12 md:px-8">
-    <WorkflowDesigner initialWorkflowId={workflowId} client:load />
+    <WorkflowDesigner 
+      initialWorkflowId={workflowId || undefined} 
+      initialServerId={serverId || undefined}
+      client:load 
+    />
   </main>
 </Layout>

@@ -5,11 +5,16 @@ import {
   Plus,
   Server,
   Activity,
-  ExternalLink,
   ChevronRight,
   Loader2,
   Settings,
   Database,
+  Play,
+  Square,
+  RotateCw,
+  Trash2,
+  RefreshCcw,
+  MoreVertical,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -21,9 +26,9 @@ const workspaces = ref<any[]>(props.initialWorkspaces || []);
 const loading = ref(!props.initialWorkspaces);
 const creating = ref(false);
 const newWorkspaceName = ref("");
+const activeMenuId = ref<string | null>(null);
 
 async function fetchWorkspaces() {
-  // Only fetch if we didn't get initial data, or to refresh
   try {
     const data = await orpc.fluvia.workspace.list();
     workspaces.value = data;
@@ -61,6 +66,40 @@ async function provisionServer(workspaceId: string) {
   } catch (error) {
     console.error("Failed to provision server:", error);
   }
+}
+
+// Infrastructure Actions
+async function stopServer(id: string) {
+  await orpc.fluvia.server.stop({ id });
+  await fetchWorkspaces();
+  activeMenuId.value = null;
+}
+
+async function resumeServer(id: string) {
+  await orpc.fluvia.server.resume({ id });
+  await fetchWorkspaces();
+  activeMenuId.value = null;
+}
+
+async function restartServer(id: string) {
+  await orpc.fluvia.server.restart({ id });
+  await fetchWorkspaces();
+  activeMenuId.value = null;
+}
+
+async function deleteServer(id: string) {
+  if (!confirm("Are you sure you want to delete this server? All deployed workflows will be lost."))
+    return;
+  await orpc.fluvia.server.delete({ id });
+  await fetchWorkspaces();
+  activeMenuId.value = null;
+}
+
+async function reinstallServer(id: string) {
+  if (!confirm("This will wipe all data and reinstall the server from scratch. Proceed?")) return;
+  await orpc.fluvia.server.reinstall({ id });
+  await fetchWorkspaces();
+  activeMenuId.value = null;
 }
 
 const activeServersCount = computed(
@@ -120,7 +159,7 @@ const stats = computed(() => [
       </div>
     </div>
 
-    <!-- Stats Overview (Subtle Layering) -->
+    <!-- Stats Overview -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div
         v-for="stat in stats"
@@ -179,12 +218,12 @@ const stats = computed(() => [
             </div>
           </div>
 
-          <!-- Server Status -->
+          <!-- Servers -->
           <div v-if="ws.servers && ws.servers.length > 0" class="space-y-4">
             <div
               v-for="srv in ws.servers"
               :key="srv.id"
-              class="bg-black/20 rounded-lg p-4 border border-white/5 space-y-3"
+              class="bg-black/20 rounded-lg p-4 border border-white/5 space-y-3 relative"
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -194,17 +233,65 @@ const stats = computed(() => [
                         'size-2 rounded-full',
                         srv.status === 'active'
                           ? 'bg-accent animate-pulse'
-                          : srv.status === 'provisioning'
-                            ? 'bg-orange-400 animate-pulse'
-                            : 'bg-rose-500',
+                          : srv.status === 'stopped'
+                            ? 'bg-zinc-600'
+                            : srv.status === 'provisioning'
+                              ? 'bg-orange-400 animate-pulse'
+                              : 'bg-rose-500',
                       )
                     "
                   ></div>
                   <span class="text-sm font-medium text-white capitalize">{{ srv.status }}</span>
                 </div>
-                <span class="text-[10px] font-mono text-muted-foreground"
-                  >CUBEPATH: {{ srv.id.slice(0, 8) }}</span
-                >
+
+                <!-- Infrastructure Menu -->
+                <div class="relative">
+                  <button
+                    @click="activeMenuId = activeMenuId === srv.id ? null : srv.id"
+                    class="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <MoreVertical class="size-4 text-muted-foreground" />
+                  </button>
+
+                  <div
+                    v-if="activeMenuId === srv.id"
+                    class="absolute right-0 top-full mt-2 w-48 glass-panel rounded-xl shadow-2xl z-50 p-1 overflow-hidden"
+                  >
+                    <button
+                      v-if="srv.status === 'active'"
+                      @click="stopServer(srv.id)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                    >
+                      <Square class="size-3" /> Stop Server
+                    </button>
+                    <button
+                      v-if="srv.status === 'stopped'"
+                      @click="resumeServer(srv.id)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                    >
+                      <Play class="size-3" /> Resume Server
+                    </button>
+                    <button
+                      @click="restartServer(srv.id)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                    >
+                      <RotateCw class="size-3" /> Restart
+                    </button>
+                    <div class="h-px bg-white/5 my-1"></div>
+                    <button
+                      @click="reinstallServer(srv.id)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-orange-400/80"
+                    >
+                      <RefreshCcw class="size-3" /> Reinstall
+                    </button>
+                    <button
+                      @click="deleteServer(srv.id)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-rose-500/80"
+                    >
+                      <Trash2 class="size-3" /> Delete Server
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="flex items-center justify-between gap-4 pt-2">
@@ -216,13 +303,9 @@ const stats = computed(() => [
                   <span class="text-xs truncate text-accent font-mono">{{ srv.url }}</span>
                 </div>
 
-                <a
-                  :href="`/dashboard/${ws.id}/designer?serverId=${srv.id}`"
-                  class="bg-white/5 hover:bg-white/10 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all whitespace-nowrap border border-white/5"
+                <span class="text-[10px] font-mono text-muted-foreground uppercase"
+                  >CubePath: {{ srv.id.slice(0, 8) }}</span
                 >
-                  Configure
-                  <ChevronRight class="size-3" />
-                </a>
               </div>
             </div>
           </div>
@@ -245,14 +328,14 @@ const stats = computed(() => [
         <!-- Footer / Action bar -->
         <div class="bg-black/10 px-6 py-3 border-t border-border flex items-center justify-between">
           <span class="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
-            {{ ws.servers?.[0]?.workflows?.length || 0 }} Active Workflows
+            {{ ws.servers?.[0]?.workflows?.length || 0 }} Snapshots Deployed
           </span>
           <div class="flex items-center gap-4">
             <a
-              :href="`/dashboard/${ws.id}`"
+              :href="`/dashboard/designer`"
               class="text-xs font-medium text-white/50 hover:text-white transition-colors flex items-center gap-1"
             >
-              Details
+              AI Designer
               <ChevronRight class="size-3" />
             </a>
           </div>

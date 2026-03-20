@@ -1,9 +1,9 @@
 ---
 import Layout from "@/layouts/Layout.astro";
-import WorkflowLibrary from "../../components/fluvia/WorkflowLibrary.vue";
+import WorkflowLibrary from "@/components/fluvia/WorkflowLibrary.vue";
 
+// Auth guard
 const user = Astro.locals.user;
-
 if (!user) {
   return Astro.redirect("/login");
 }
