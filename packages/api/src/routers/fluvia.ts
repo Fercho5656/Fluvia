@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { db } from "@my-better-t-app/db";
-import { workspace, server, workflow } from "@my-better-t-app/db/schema/fluvia";
+import { workspace, server, workflow, customWorkflow } from "@my-better-t-app/db/schema/fluvia";
 import { env } from "@my-better-t-app/env/server";
 import { ORPCError } from "@orpc/server";
 import { generateText } from "ai";
@@ -55,9 +55,90 @@ export const fluviaRouter = {
           url: `https://n8n-${id.slice(0, 8)}.cubepath.io`,
         });
 
-        // In a real app, we'd start a background job.
-        // For the hackathon prototype, we'll just return the id.
         return { id };
+      }),
+  },
+
+  customWorkflow: {
+    list: protectedProcedure.handler(async ({ context }) => {
+      return await db.query.customWorkflow.findMany({
+        where: eq(customWorkflow.userId, context.session.user.id),
+        orderBy: (fields, { desc }) => [desc(fields.createdAt)],
+      });
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .handler(async ({ input, context }) => {
+        const result = await db.query.customWorkflow.findFirst({
+          where: and(
+            eq(customWorkflow.id, input.id),
+            eq(customWorkflow.userId, context.session.user.id),
+          ),
+        });
+        if (!result) throw new ORPCError("NOT_FOUND");
+        return result;
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string(),
+          n8nJson: z.any(),
+          description: z.string().optional(),
+        }),
+      )
+      .handler(async ({ input, context }) => {
+        const id = randomUUID();
+        await db.insert(customWorkflow).values({
+          id,
+          name: input.name,
+          n8nJson: input.n8nJson,
+          description: input.description,
+          userId: context.session.user.id,
+        });
+        return { id };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          name: z.string().optional(),
+          n8nJson: z.any().optional(),
+          description: z.string().optional(),
+        }),
+      )
+      .handler(async ({ input, context }) => {
+        await db
+          .update(customWorkflow)
+          .set({
+            name: input.name,
+            n8nJson: input.n8nJson,
+            description: input.description,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(customWorkflow.id, input.id),
+              eq(customWorkflow.userId, context.session.user.id),
+            ),
+          );
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .handler(async ({ input, context }) => {
+        await db
+          .delete(customWorkflow)
+          .where(
+            and(
+              eq(customWorkflow.id, input.id),
+              eq(customWorkflow.userId, context.session.user.id),
+            ),
+          );
+        return { success: true };
       }),
   },
 
@@ -65,14 +146,13 @@ export const fluviaRouter = {
     generate: protectedProcedure
       .input(
         z.object({
-          serverId: z.string(),
           prompt: z.string(),
           name: z.string().default("New AI Workflow"),
         }),
       )
       .handler(async ({ input }) => {
         const { text } = await generateText({
-          model: openrouter("anthropic/claude-3.5-sonnet"),
+          model: openrouter("openrouter/free"),
           system: `You are an expert in n8n automation. 
           Your task is to generate valid n8n workflow JSON based on the user's description.
           Output ONLY the JSON. No explanations, no markdown blocks. 
@@ -82,7 +162,6 @@ export const fluviaRouter = {
 
         let n8nJson;
         try {
-          // Clean up markdown code blocks if AI included them
           const cleanedText = text
             .replace(/```json/g, "")
             .replace(/```/g, "")
@@ -95,29 +174,30 @@ export const fluviaRouter = {
           });
         }
 
+        return { n8nJson };
+      }),
+
+    deploy: protectedProcedure
+      .input(
+        z.object({
+          serverId: z.string(),
+          customWorkflowId: z.string(),
+          name: z.string(),
+          n8nJson: z.any(),
+        }),
+      )
+      .handler(async ({ input }) => {
         const id = randomUUID();
         await db.insert(workflow).values({
           id,
           serverId: input.serverId,
+          customWorkflowId: input.customWorkflowId,
           name: input.name,
-          description: input.prompt,
-          n8nJson: n8nJson,
-          status: "draft",
+          n8nJson: input.n8nJson, // Snapshot of the JSON
+          status: "active",
         });
 
-        return { id, n8nJson };
-      }),
-
-    deploy: protectedProcedure
-      .input(z.object({ workflowId: z.string() }))
-      .handler(async ({ input }) => {
-        // Mocking deployment to n8n
-        await db
-          .update(workflow)
-          .set({ status: "active" })
-          .where(eq(workflow.id, input.workflowId));
-
-        return { success: true };
+        return { id, success: true };
       }),
   },
 };
