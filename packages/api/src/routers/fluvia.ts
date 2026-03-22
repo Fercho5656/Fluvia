@@ -3,6 +3,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { db } from "@my-better-t-app/db";
 import { workspace, server, workflow, customWorkflow } from "@my-better-t-app/db/schema/fluvia";
 import { env } from "@my-better-t-app/env/server";
+import { CubePathService } from "../services/cubepath";
 import { ORPCError } from "@orpc/server";
 import { generateText } from "ai";
 import { eq, and } from "drizzle-orm";
@@ -17,7 +18,7 @@ export const fluviaRouter = {
   workspace: {
     list: protectedProcedure.handler(async ({ context }) => {
       const userId = context.session.user.id;
-      return await db.query.workspace.findMany({
+      const workspaces = await db.query.workspace.findMany({
         where: eq(workspace.agencyId, userId),
         with: {
           servers: {
@@ -27,6 +28,44 @@ export const fluviaRouter = {
           },
         },
       });
+
+      // Optionally sync status with CubePath for each server
+      // For performance in a real app, we'd do this via webhooks or background sync
+      // But for the hackathon, we can try to fetch live status if it's not provisioning
+      const syncedWorkspaces = await Promise.all(
+        workspaces.map(async (ws) => {
+          if (ws.servers) {
+            ws.servers = await Promise.all(
+              ws.servers.map(async (srv) => {
+                if (srv.cubePathId && srv.status !== "provisioning") {
+                  try {
+                    const details = await CubePathService.getVpsDetails(srv.cubePathId);
+                    // Map CubePath status to our enum: active, stopped, error
+                    let mappedStatus: "active" | "stopped" | "error" | "provisioning" = "active";
+                    if (details.status === "off" || details.status === "stopped")
+                      mappedStatus = "stopped";
+                    if (details.status === "error") mappedStatus = "error";
+
+                    if (mappedStatus !== srv.status) {
+                      await db
+                        .update(server)
+                        .set({ status: mappedStatus })
+                        .where(eq(server.id, srv.id));
+                      srv.status = mappedStatus;
+                    }
+                  } catch (e) {
+                    console.error(`Failed to sync server ${srv.id}:`, e);
+                  }
+                }
+                return srv;
+              }),
+            );
+          }
+          return ws;
+        }),
+      );
+
+      return syncedWorkspaces;
     }),
 
     create: protectedProcedure
@@ -54,6 +93,21 @@ export const fluviaRouter = {
     delete: protectedProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input, context }) => {
+        // Delete all associated VPS from CubePath first
+        const servers = await db.query.server.findMany({
+          where: eq(server.workspaceId, input.id),
+        });
+
+        for (const srv of servers) {
+          if (srv.cubePathId) {
+            try {
+              await CubePathService.deleteVps(srv.cubePathId);
+            } catch (e) {
+              console.error(`Failed to delete VPS ${srv.cubePathId} from CubePath:`, e);
+            }
+          }
+        }
+
         await db
           .delete(workspace)
           .where(and(eq(workspace.id, input.id), eq(workspace.agencyId, context.session.user.id)));
@@ -66,27 +120,55 @@ export const fluviaRouter = {
       .input(z.object({ workspaceId: z.string() }))
       .handler(async ({ input }) => {
         const id = randomUUID();
-        await db.insert(server).values({
-          id,
-          workspaceId: input.workspaceId,
-          status: "provisioning",
-          url: `https://n8n-${id.slice(0, 8)}.cubepath.io`,
-        });
-        return { id };
+
+        try {
+          // Real CubePath Provisioning
+          const vps = await CubePathService.createVps({
+            name: `n8n-${id.slice(0, 8)}`,
+            plan_name: "gp.nano",
+            template_name: "n8n",
+            location: "3",
+          });
+
+          await db.insert(server).values({
+            id,
+            workspaceId: input.workspaceId,
+            cubePathId: vps.id,
+            status: "provisioning",
+            url: `https://n8n-${vps.id.slice(0, 8)}.cubepath.io`, // Assuming standard URL pattern
+          });
+
+          return { id, cubePathId: vps.id };
+        } catch (e: any) {
+          throw new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: `Failed to provision VPS: ${e.message}`,
+          });
+        }
       }),
 
     stop: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
+      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+
+      await CubePathService.performAction(srv.cubePathId, "stop");
       await db.update(server).set({ status: "stopped" }).where(eq(server.id, input.id));
       return { success: true };
     }),
 
     resume: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
+      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+
+      await CubePathService.performAction(srv.cubePathId, "start");
       await db.update(server).set({ status: "active" }).where(eq(server.id, input.id));
       return { success: true };
     }),
 
     restart: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      // Mock restart sequence
+      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+
+      await CubePathService.performAction(srv.cubePathId, "reboot");
       await db
         .update(server)
         .set({ status: "active", updatedAt: new Date() })
@@ -95,13 +177,24 @@ export const fluviaRouter = {
     }),
 
     delete: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
+      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+      if (srv?.cubePathId) {
+        try {
+          await CubePathService.deleteVps(srv.cubePathId);
+        } catch (e) {
+          console.error(`CubePath VPS deletion failed:`, e);
+        }
+      }
       await db.delete(server).where(eq(server.id, input.id));
       return { success: true };
     }),
 
     reinstall: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      // Reset server to provisioning and wipe workflows
+      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+
       await db.transaction(async (tx) => {
+        await CubePathService.reinstallVps(srv.cubePathId!, "n8n");
         await tx
           .update(server)
           .set({ status: "provisioning", updatedAt: new Date() })
