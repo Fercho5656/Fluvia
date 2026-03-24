@@ -18,6 +18,10 @@ import {
   X,
   Check,
   Pencil,
+  Copy,
+  Eye,
+  EyeOff,
+  ShieldAlert,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +38,20 @@ const activeMenuId = ref<string | null>(null);
 // Workspace Edit state
 const editingWorkspaceId = ref<string | null>(null);
 const editNameValue = ref("");
+
+// Password Security State
+const showProvisionModal = ref(false);
+const generatedPassword = ref("");
+const passwordVisible = ref(false);
+const passwordConfirmed = ref(false);
+
+const provisioningWorkspaceId = ref<string | null>(null);
+
+const showActionModal = ref(false);
+const actionPassword = ref("");
+const currentAction = ref<{ type: string; id: string; label: string } | null>(null);
+const actionLoading = ref(false);
+const actionError = ref("");
 
 async function fetchWorkspaces() {
   try {
@@ -66,12 +84,57 @@ async function createWorkspace() {
   }
 }
 
-async function provisionServer(workspaceId: string) {
+async function provisionServer(workspaceName: string, workspaceId: string) {
+  provisioningWorkspaceId.value = workspaceId;
   try {
-    await orpc.fluvia.server.provision({ workspaceId });
+    const result = await orpc.fluvia.server.provision({ workspaceName, workspaceId });
+    generatedPassword.value = result.password;
+    showProvisionModal.value = true;
+    passwordConfirmed.value = false;
     await fetchWorkspaces();
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to provision server:", error);
+    alert(error.message || "Failed to provision server. CubePath may be out of IPv4 resources.");
+  } finally {
+    provisioningWorkspaceId.value = null;
+  }
+}
+
+function copyPassword() {
+  navigator.clipboard.writeText(generatedPassword.value);
+}
+
+// Action Verification
+function openActionModal(type: string, id: string, label: string) {
+  currentAction.value = { type, id, label };
+  actionPassword.value = "";
+  actionError.value = "";
+  showActionModal.value = true;
+  activeMenuId.value = null;
+}
+
+async function executeAction() {
+  if (!currentAction.value || !actionPassword.value) return;
+  actionLoading.value = true;
+  actionError.value = "";
+
+  try {
+    const { type, id } = currentAction.value;
+    const payload = { id, password: actionPassword.value };
+
+    if (type === "stop") await orpc.fluvia.server.stop(payload);
+    else if (type === "resume") await orpc.fluvia.server.resume(payload);
+    else if (type === "restart") await orpc.fluvia.server.restart(payload);
+    else if (type === "delete") await orpc.fluvia.server.delete(payload);
+    else if (type === "reinstall") await orpc.fluvia.server.reinstall(payload);
+
+    showActionModal.value = false;
+    currentAction.value = null;
+    await fetchWorkspaces();
+  } catch (error: any) {
+    actionError.value = error.message || "Invalid password or server error.";
+  } finally {
+    actionLoading.value = false;
   }
 }
 
@@ -106,40 +169,6 @@ async function deleteWorkspace(id: string) {
   }
 }
 
-// Infrastructure Actions
-async function stopServer(id: string) {
-  await orpc.fluvia.server.stop({ id });
-  await fetchWorkspaces();
-  activeMenuId.value = null;
-}
-
-async function resumeServer(id: string) {
-  await orpc.fluvia.server.resume({ id });
-  await fetchWorkspaces();
-  activeMenuId.value = null;
-}
-
-async function restartServer(id: string) {
-  await orpc.fluvia.server.restart({ id });
-  await fetchWorkspaces();
-  activeMenuId.value = null;
-}
-
-async function deleteServer(id: string) {
-  if (!confirm("Are you sure you want to delete this server? All deployed workflows will be lost."))
-    return;
-  await orpc.fluvia.server.delete({ id });
-  await fetchWorkspaces();
-  activeMenuId.value = null;
-}
-
-async function reinstallServer(id: string) {
-  if (!confirm("This will wipe all data and reinstall the server from scratch. Proceed?")) return;
-  await orpc.fluvia.server.reinstall({ id });
-  await fetchWorkspaces();
-  activeMenuId.value = null;
-}
-
 const activeServersCount = computed(
   () => workspaces.value.filter((w) => w.servers?.some((s: any) => s.status === "active")).length,
 );
@@ -165,7 +194,7 @@ const stats = computed(() => [
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="space-y-8 relative">
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
@@ -331,33 +360,33 @@ const stats = computed(() => [
                   >
                     <button
                       v-if="srv.status === 'active'"
-                      @click="stopServer(srv.id)"
+                      @click="openActionModal('stop', srv.id, 'Stop Server')"
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
                     >
                       <Square class="size-3" /> Stop Server
                     </button>
                     <button
                       v-if="srv.status === 'stopped'"
-                      @click="resumeServer(srv.id)"
+                      @click="openActionModal('resume', srv.id, 'Resume Server')"
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
                     >
                       <Play class="size-3" /> Resume Server
                     </button>
                     <button
-                      @click="restartServer(srv.id)"
+                      @click="openActionModal('restart', srv.id, 'Restart')"
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
                     >
                       <RotateCw class="size-3" /> Restart
                     </button>
                     <div class="h-px bg-white/5 my-1"></div>
                     <button
-                      @click="reinstallServer(srv.id)"
+                      @click="openActionModal('reinstall', srv.id, 'Reinstall')"
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-orange-400/80"
                     >
                       <RefreshCcw class="size-3" /> Reinstall
                     </button>
                     <button
-                      @click="deleteServer(srv.id)"
+                      @click="openActionModal('delete', srv.id, 'Delete Server')"
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-rose-500/80"
                     >
                       <Trash2 class="size-3" /> Delete Server
@@ -386,14 +415,25 @@ const stats = computed(() => [
             v-else
             class="bg-black/20 rounded-lg p-8 border border-dashed border-white/10 flex flex-col items-center justify-center text-center"
           >
-            <p class="text-sm text-muted-foreground mb-4">No automation server provisioned.</p>
-            <button
-              @click="provisionServer(ws.id)"
-              class="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-2 uppercase tracking-widest"
-            >
-              <Server class="size-3" />
-              Provision CubePath Server
-            </button>
+            <template v-if="provisioningWorkspaceId === ws.id">
+              <Loader2 class="size-8 animate-spin text-primary mb-4" />
+              <p class="text-sm text-muted-foreground">Provisioning your server...</p>
+              <p
+                class="text-[10px] text-muted-foreground/60 mt-1 uppercase tracking-widest font-bold"
+              >
+                Retrying if IP reservation fails
+              </p>
+            </template>
+            <template v-else>
+              <p class="text-sm text-muted-foreground mb-4">No automation server provisioned.</p>
+              <button
+                @click="provisionServer(ws.name, ws.id)"
+                class="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-2 uppercase tracking-widest"
+              >
+                <Server class="size-3" />
+                Provision CubePath Server
+              </button>
+            </template>
           </div>
         </div>
 
@@ -411,6 +451,126 @@ const stats = computed(() => [
               <ChevronRight class="size-3" />
             </a>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- One-Time Password Display Modal -->
+    <div
+      v-if="showProvisionModal"
+      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div
+        class="glass-panel w-full max-w-md p-8 rounded-2xl border-primary/20 space-y-6 shadow-2xl"
+      >
+        <div class="flex flex-col items-center text-center space-y-2">
+          <div class="bg-primary/20 p-3 rounded-full mb-2">
+            <ShieldAlert class="size-8 text-primary" />
+          </div>
+          <h2 class="text-2xl font-bold text-white">VPS Security Credentials</h2>
+          <p class="text-muted-foreground text-sm">
+            Your server is being provisioned. This is the **ONLY TIME** you will see your root
+            password. Please store it securely (e.g., in a password manager).
+          </p>
+        </div>
+
+        <div class="bg-black/40 border border-white/10 rounded-xl p-4 space-y-2">
+          <label class="text-[10px] uppercase tracking-widest text-muted-foreground font-bold"
+            >Root Password</label
+          >
+          <div class="flex items-center gap-2">
+            <input
+              :type="passwordVisible ? 'text' : 'password'"
+              :value="generatedPassword"
+              readonly
+              class="flex-1 bg-transparent border-none text-xl font-mono text-accent focus:ring-0"
+            />
+            <button
+              @click="passwordVisible = !passwordVisible"
+              class="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            >
+              <component :is="passwordVisible ? EyeOff : Eye" class="size-4" />
+            </button>
+            <button
+              @click="copyPassword"
+              class="p-2 hover:bg-white/5 rounded-lg transition-colors text-primary"
+            >
+              <Copy class="size-4" />
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="confirm-pwd"
+              v-model="passwordConfirmed"
+              class="size-4 rounded border-white/10 bg-black/40 text-primary focus:ring-primary"
+            />
+            <label for="confirm-pwd" class="text-xs text-muted-foreground">
+              I have safely stored this password and understand it won't be shown again.
+            </label>
+          </div>
+
+          <button
+            @click="showProvisionModal = false"
+            :disabled="!passwordConfirmed"
+            class="w-full bg-primary hover:bg-primary/90 disabled:opacity-30 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-primary/20"
+          >
+            I'm Ready to Continue
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Verification Modal -->
+    <div
+      v-if="showActionModal"
+      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border-white/10 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold text-white">{{ currentAction?.label }}</h3>
+          <button @click="showActionModal = false" class="p-1 hover:bg-white/5 rounded-lg">
+            <X class="size-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        <p class="text-xs text-muted-foreground">
+          Please enter your VPS root password to authorize this action.
+        </p>
+
+        <div class="space-y-3">
+          <input
+            v-model="actionPassword"
+            type="password"
+            placeholder="Root Password"
+            class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+            @keyup.enter="executeAction"
+          />
+          <p v-if="actionError" class="text-[10px] text-rose-500 font-bold uppercase tracking-wide">
+            {{ actionError }}
+          </p>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            @click="showActionModal = false"
+            class="flex-1 bg-white/5 hover:bg-white/10 text-white text-sm py-2.5 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            @click="executeAction"
+            :disabled="actionLoading || !actionPassword"
+            class="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+          >
+            <Loader2 v-if="actionLoading" class="size-4 animate-spin" />
+            Confirm
+          </button>
         </div>
       </div>
     </div>

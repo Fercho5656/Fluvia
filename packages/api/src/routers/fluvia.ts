@@ -6,7 +6,7 @@ import { env } from "@my-better-t-app/env/server";
 import { CubePathService } from "../services/cubepath";
 import { ORPCError } from "@orpc/server";
 import { generateText } from "ai";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 
@@ -29,23 +29,38 @@ export const fluviaRouter = {
         },
       });
 
-      // Optionally sync status with CubePath for each server
-      // For performance in a real app, we'd do this via webhooks or background sync
-      // But for the hackathon, we can try to fetch live status if it's not provisioning
+      // SYNC LOGIC: Fetch all VPS in one call to avoid 404s and excessive requests
+      let cubePathVpsList: any[] = [];
+      try {
+        cubePathVpsList = await CubePathService.listVps();
+      } catch (e) {
+        console.error("Failed to fetch CubePath VPS list:", e);
+      }
+
       const syncedWorkspaces = await Promise.all(
         workspaces.map(async (ws) => {
           if (ws.servers) {
             ws.servers = await Promise.all(
               ws.servers.map(async (srv) => {
-                if (srv.cubePathId && srv.status !== "provisioning") {
-                  try {
-                    const details = await CubePathService.getVpsDetails(srv.cubePathId);
-                    // Map CubePath status to our enum: active, stopped, error
-                    let mappedStatus: "active" | "stopped" | "error" | "provisioning" = "active";
-                    if (details.status === "off" || details.status === "stopped")
-                      mappedStatus = "stopped";
-                    if (details.status === "error") mappedStatus = "error";
+                if (!srv.cubePathId || srv.status === "deleting") return srv;
 
+                // Ignore sync for servers that are brand new to allow API propagation
+                const srvCreated = srv.createdAt?.getTime() || 0;
+                const isVeryNew = srvCreated && Date.now() - srvCreated < 30000;
+                if (isVeryNew) return srv;
+
+                // Find this server in the master list from CubePath
+                const vpsInfo = cubePathVpsList.find(
+                  (v) =>
+                    String(v.id) === srv.cubePathId ||
+                    String(v.vps_id) === srv.cubePathId ||
+                    String(v.vpsid) === srv.cubePathId,
+                );
+
+                if (vpsInfo) {
+                  const rawStatus = String(vpsInfo.status || "").toLowerCase();
+                  if (["active", "stopped", "deploying", "deleting", "error"].includes(rawStatus)) {
+                    const mappedStatus = rawStatus as typeof srv.status;
                     if (mappedStatus !== srv.status) {
                       await db
                         .update(server)
@@ -53,8 +68,6 @@ export const fluviaRouter = {
                         .where(eq(server.id, srv.id));
                       srv.status = mappedStatus;
                     }
-                  } catch (e) {
-                    console.error(`Failed to sync server ${srv.id}:`, e);
                   }
                 }
                 return srv;
@@ -93,7 +106,6 @@ export const fluviaRouter = {
     delete: protectedProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input, context }) => {
-        // Delete all associated VPS from CubePath first
         const servers = await db.query.server.findMany({
           where: eq(server.workspaceId, input.id),
         });
@@ -117,92 +129,155 @@ export const fluviaRouter = {
 
   server: {
     provision: protectedProcedure
-      .input(z.object({ workspaceId: z.string() }))
+      .input(z.object({ workspaceName: z.string(), workspaceId: z.string() }))
       .handler(async ({ input }) => {
         const id = randomUUID();
+        const password = CubePathService.generateRandomPassword();
+        const passwordHash = CubePathService.hashPassword(password);
+
+        const maxRetries = 3;
+        let vps: any;
+        let lastError: any;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            vps = await CubePathService.createVps({
+              label: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
+              name: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
+              plan_name: "gp.nano",
+              template_name: "n8n",
+              location_name: "us-hou-1",
+              password: password,
+            });
+            break;
+          } catch (e: any) {
+            lastError = e;
+            console.error(`CubePath creation attempt ${attempt} failed: ${e.message}`);
+            if (attempt === maxRetries) {
+              throw new ORPCError("INTERNAL_SERVER_ERROR", {
+                message: `Failed to create VPS after ${maxRetries} attempts. ${e.message}`,
+                cause: e,
+              });
+            }
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
 
         try {
-          // Real CubePath Provisioning
-          const vps = await CubePathService.createVps({
-            name: `n8n-${id.slice(0, 8)}`,
-            plan_name: "gp.nano",
-            template_name: "n8n",
-            location: "3",
-          });
+          const cubePathId = String(vps.id || vps.vps_id || vps.vpsid || "");
+          if (!cubePathId) {
+            throw new Error("CubePath returned success but no VPS ID was found.");
+          }
 
           await db.insert(server).values({
             id,
             workspaceId: input.workspaceId,
-            cubePathId: vps.id,
-            status: "provisioning",
-            url: `https://n8n-${vps.id.slice(0, 8)}.cubepath.io`, // Assuming standard URL pattern
+            cubePathId,
+            status: "deploying",
+            passwordHash: passwordHash,
+            url: `https://n8n-${cubePathId.slice(0, 8)}.cubepath.io`,
           });
 
-          return { id, cubePathId: vps.id };
+          return { id, password };
         } catch (e: any) {
+          console.error("Local database insertion failed:", e);
           throw new ORPCError("INTERNAL_SERVER_ERROR", {
-            message: `Failed to provision VPS: ${e.message}`,
+            message: `Server created on CubePath (${vps?.id}) but local setup failed: ${e.message}`,
+            cause: e,
           });
         }
       }),
 
-    stop: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
-      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+    stop: protectedProcedure
+      .input(z.object({ id: z.string(), password: z.string() }))
+      .handler(async ({ input }) => {
+        const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+        if (!srv?.cubePathId || !srv.passwordHash) throw new ORPCError("NOT_FOUND");
 
-      await CubePathService.performAction(srv.cubePathId, "stop");
-      await db.update(server).set({ status: "stopped" }).where(eq(server.id, input.id));
-      return { success: true };
-    }),
+        if (!CubePathService.verifyPassword(input.password, srv.passwordHash)) {
+          throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
+        }
 
-    resume: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
-      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+        await CubePathService.powerControlVps(srv.cubePathId, "stop_vps");
+        await db.update(server).set({ status: "stopped" }).where(eq(server.id, input.id));
+        return { success: true };
+      }),
 
-      await CubePathService.performAction(srv.cubePathId, "start");
-      await db.update(server).set({ status: "active" }).where(eq(server.id, input.id));
-      return { success: true };
-    }),
+    resume: protectedProcedure
+      .input(z.object({ id: z.string(), password: z.string() }))
+      .handler(async ({ input }) => {
+        const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+        if (!srv?.cubePathId || !srv.passwordHash) throw new ORPCError("NOT_FOUND");
 
-    restart: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
-      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+        if (!CubePathService.verifyPassword(input.password, srv.passwordHash)) {
+          throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
+        }
 
-      await CubePathService.performAction(srv.cubePathId, "reboot");
-      await db
-        .update(server)
-        .set({ status: "active", updatedAt: new Date() })
-        .where(eq(server.id, input.id));
-      return { success: true };
-    }),
+        await db.update(server).set({ status: "deploying" }).where(eq(server.id, input.id));
+        await CubePathService.powerControlVps(srv.cubePathId, "start_vps");
 
-    delete: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
-      if (srv?.cubePathId) {
+        return { success: true };
+      }),
+
+    restart: protectedProcedure
+      .input(z.object({ id: z.string(), password: z.string() }))
+      .handler(async ({ input }) => {
+        const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+        if (!srv?.cubePathId || !srv.passwordHash) throw new ORPCError("NOT_FOUND");
+
+        if (!CubePathService.verifyPassword(input.password, srv.passwordHash)) {
+          throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
+        }
+
+        await db.update(server).set({ status: "deploying" }).where(eq(server.id, input.id));
+        await CubePathService.powerControlVps(srv.cubePathId, "reboot_vps");
+
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string(), password: z.string() }))
+      .handler(async ({ input }) => {
+        const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+        if (!srv?.cubePathId || !srv.passwordHash) throw new ORPCError("NOT_FOUND");
+
+        if (!CubePathService.verifyPassword(input.password, srv.passwordHash)) {
+          throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
+        }
+
+        await db.update(server).set({ status: "deleting" }).where(eq(server.id, input.id));
+
         try {
           await CubePathService.deleteVps(srv.cubePathId);
+          await db.delete(server).where(eq(server.id, input.id));
         } catch (e) {
-          console.error(`CubePath VPS deletion failed:`, e);
+          await db.update(server).set({ status: "error" }).where(eq(server.id, input.id));
+          throw e;
         }
-      }
-      await db.delete(server).where(eq(server.id, input.id));
-      return { success: true };
-    }),
 
-    reinstall: protectedProcedure.input(z.object({ id: z.string() })).handler(async ({ input }) => {
-      const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
-      if (!srv?.cubePathId) throw new ORPCError("NOT_FOUND");
+        return { success: true };
+      }),
 
-      await db.transaction(async (tx) => {
-        await CubePathService.reinstallVps(srv.cubePathId!, "n8n");
-        await tx
-          .update(server)
-          .set({ status: "provisioning", updatedAt: new Date() })
-          .where(eq(server.id, input.id));
-        await tx.delete(workflow).where(eq(workflow.serverId, input.id));
-      });
-      return { success: true };
-    }),
+    reinstall: protectedProcedure
+      .input(z.object({ id: z.string(), password: z.string() }))
+      .handler(async ({ input }) => {
+        const srv = await db.query.server.findFirst({ where: eq(server.id, input.id) });
+        if (!srv?.cubePathId || !srv.passwordHash) throw new ORPCError("NOT_FOUND");
+
+        if (!CubePathService.verifyPassword(input.password, srv.passwordHash)) {
+          throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
+        }
+
+        await db.transaction(async (tx) => {
+          await CubePathService.reinstallVps(srv.cubePathId!, input.password);
+          await tx
+            .update(server)
+            .set({ status: "deploying", updatedAt: new Date() })
+            .where(eq(server.id, input.id));
+          await tx.delete(workflow).where(eq(workflow.serverId, input.id));
+        });
+        return { success: true };
+      }),
   },
 
   customWorkflow: {
