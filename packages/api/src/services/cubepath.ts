@@ -6,25 +6,53 @@ export class CubePathService {
   private static apiKey = env.CUBEPATH_API_KEY;
   private static projectId = 2074;
 
+  // Explicit scrypt params for maximum consistency
+  private static readonly SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
+  private static readonly KEY_LEN = 64;
+
   /**
-   * Secure Hashing (Matches common standards)
+   * Secure Hashing
    */
   static hashPassword(password: string): string {
-    const salt = randomBytes(16).toString("hex");
-    const hash = scryptSync(password, salt, 64).toString("hex");
-    return `${salt}:${hash}`;
+    const cleanPassword = password.trim();
+    const salt = randomBytes(16);
+    const hash = scryptSync(cleanPassword, salt, this.KEY_LEN, this.SCRYPT_PARAMS);
+
+    const saltHex = salt.toString("hex");
+    const hashHex = hash.toString("hex");
+
+    return `${saltHex}:${hashHex}`;
   }
 
   static verifyPassword(password: string, storedHash: string): boolean {
-    const [salt, hash] = storedHash.split(":");
-    if (!salt || !hash) return false;
-    const saltBuffer = Buffer.from(salt, "hex");
-    const hashBuffer = Buffer.from(hash, "hex");
-    const verificationBuffer = scryptSync(password, saltBuffer, 64);
-    return timingSafeEqual(verificationBuffer, hashBuffer);
+    const cleanPassword = password.trim();
+
+    const parts = storedHash.split(":");
+    if (parts.length !== 2) return false;
+
+    const [saltHex, storedHashHex] = parts;
+    const salt = Buffer.from(saltHex!, "hex");
+    const storedHashBuffer = Buffer.from(storedHashHex!, "hex");
+
+    const attemptHashBuffer = scryptSync(cleanPassword, salt, this.KEY_LEN, this.SCRYPT_PARAMS);
+
+    // Internal sanity check: If we hash the SAME things again, do they match?
+    // This helps debug if scrypt is being non-deterministic (unlikely)
+    const sanityBuffer = scryptSync(cleanPassword, salt, this.KEY_LEN, this.SCRYPT_PARAMS);
+    const sanityCheck = timingSafeEqual(attemptHashBuffer, sanityBuffer);
+
+    console.log(`[Verify] Sanity check: ${sanityCheck ? "PASSED" : "FAILED"}`);
+    console.log(`[Verify] Password Length: ${cleanPassword.length}`);
+
+    try {
+      return timingSafeEqual(attemptHashBuffer, storedHashBuffer);
+    } catch (e) {
+      return false;
+    }
   }
 
   static generateRandomPassword(): string {
+    // Generate 12 random bytes and return as base64url (no + / = characters)
     return randomBytes(12).toString("base64url");
   }
 

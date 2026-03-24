@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, onUnmounted } from "vue";
 import { orpc } from "@/lib/orpc";
 import {
   Plus,
@@ -54,10 +54,46 @@ const currentAction = ref<{ type: string; id: string; label: string } | null>(nu
 const actionLoading = ref(false);
 const actionError = ref("");
 
+// Polling state
+const pollInterval = ref<any>(null);
+
+const expectingStaticTransition = ref(false);
+
+function startPolling() {
+  if (pollInterval.value) return;
+  pollInterval.value = setInterval(async () => {
+    const hasTransitional = workspaces.value.some((ws) =>
+      ws.servers?.some((s: any) =>
+        ["deploying", "deleting", "stopping", "resuming", "restarting"].includes(s.status),
+      ),
+    );
+
+    if (hasTransitional || expectingStaticTransition.value) {
+      await fetchWorkspaces();
+    } else {
+      stopPolling();
+    }
+  }, 5000); // 5s poll
+}
+
+function stopPolling() {
+  if (pollInterval.value) {
+    clearInterval(pollInterval.value);
+    pollInterval.value = null;
+  }
+}
+
 async function fetchWorkspaces() {
   try {
     const data = await orpc.fluvia.workspace.list();
     workspaces.value = data;
+    // Check if we need to start polling after a refresh
+    const hasTransitional = data.some((ws: any) =>
+      ws.servers?.some((s: any) =>
+        ["deploying", "deleting", "stopping", "resuming", "restarting"].includes(s.status),
+      ),
+    );
+    if (hasTransitional) startPolling();
   } catch (error) {
     console.error("Failed to fetch workspaces:", error);
   } finally {
@@ -68,8 +104,19 @@ async function fetchWorkspaces() {
 onMounted(() => {
   if (!props.initialWorkspaces || props.initialWorkspaces.length === 0) {
     fetchWorkspaces();
+  } else {
+    // Check initial data for polling need
+    const hasTransitional = props.initialWorkspaces.some((ws: any) =>
+      ws.servers?.some((s: any) =>
+        ["deploying", "deleting", "stopping", "resuming", "restarting"].includes(s.status),
+      ),
+    );
+    if (hasTransitional) startPolling();
   }
 });
+
+// Lifecycle cleanup
+onUnmounted(() => stopPolling());
 
 async function createWorkspace() {
   if (!newWorkspaceName.value) return;
@@ -128,6 +175,16 @@ async function executeAction() {
     else if (type === "restart") await orpc.fluvia.server.restart(payload);
     else if (type === "delete") await orpc.fluvia.server.delete(payload);
     else if (type === "reinstall") await orpc.fluvia.server.reinstall(payload);
+
+    // If it's a power action, expect a state change and start polling
+    if (["stop", "resume", "restart"].includes(type)) {
+      expectingStaticTransition.value = true;
+      startPolling();
+      // Stop expecting after 30 seconds
+      setTimeout(() => {
+        expectingStaticTransition.value = false;
+      }, 30000);
+    }
 
     showActionModal.value = false;
     currentAction.value = null;
@@ -337,9 +394,11 @@ const stats = computed(() => [
                           ? 'bg-accent animate-pulse'
                           : srv.status === 'stopped'
                             ? 'bg-zinc-600'
-                            : srv.status === 'deploying'
+                            : ['deploying', 'resuming', 'restarting'].includes(srv.status)
                               ? 'bg-orange-400 animate-pulse'
-                              : 'bg-rose-500',
+                              : ['deleting', 'stopping'].includes(srv.status)
+                                ? 'bg-rose-500 animate-pulse'
+                                : 'bg-rose-500', // error fallback
                       )
                     "
                   ></div>

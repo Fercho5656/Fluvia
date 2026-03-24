@@ -29,7 +29,6 @@ export const fluviaRouter = {
         },
       });
 
-      // SYNC LOGIC: Fetch all VPS in one call to avoid 404s and excessive requests
       let cubePathVpsList: any[] = [];
       try {
         cubePathVpsList = await CubePathService.listVps();
@@ -44,12 +43,10 @@ export const fluviaRouter = {
               ws.servers.map(async (srv) => {
                 if (!srv.cubePathId || srv.status === "deleting") return srv;
 
-                // Ignore sync for servers that are brand new to allow API propagation
                 const srvCreated = srv.createdAt?.getTime() || 0;
                 const isVeryNew = srvCreated && Date.now() - srvCreated < 30000;
                 if (isVeryNew) return srv;
 
-                // Find this server in the master list from CubePath
                 const vpsInfo = cubePathVpsList.find(
                   (v) =>
                     String(v.id) === srv.cubePathId ||
@@ -60,7 +57,31 @@ export const fluviaRouter = {
                 if (vpsInfo) {
                   const rawStatus = String(vpsInfo.status || "").toLowerCase();
                   if (["active", "stopped", "deploying", "deleting", "error"].includes(rawStatus)) {
-                    const mappedStatus = rawStatus as typeof srv.status;
+                    let mappedStatus = rawStatus as typeof srv.status;
+
+                    // Handle "fake" transitional states
+                    const isTransitional = ["stopping", "resuming", "restarting"].includes(
+                      srv.status,
+                    );
+                    if (isTransitional) {
+                      const timeSinceUpdate = srv.updatedAt
+                        ? Date.now() - srv.updatedAt.getTime()
+                        : 0;
+                      const isRecent = timeSinceUpdate < 60000; // 1 minute grace period
+
+                      if (isRecent) {
+                        // Only transition if CubePath confirms the expected end state
+                        if (srv.status === "stopping" && mappedStatus !== "stopped") {
+                          mappedStatus = "stopping";
+                        } else if (
+                          ["resuming", "restarting"].includes(srv.status) &&
+                          mappedStatus !== "active"
+                        ) {
+                          mappedStatus = srv.status;
+                        }
+                      }
+                    }
+
                     if (mappedStatus !== srv.status) {
                       await db
                         .update(server)
@@ -199,7 +220,10 @@ export const fluviaRouter = {
         }
 
         await CubePathService.powerControlVps(srv.cubePathId, "stop_vps");
-        await db.update(server).set({ status: "stopped" }).where(eq(server.id, input.id));
+        await db
+          .update(server)
+          .set({ status: "stopping", updatedAt: new Date() })
+          .where(eq(server.id, input.id));
         return { success: true };
       }),
 
@@ -213,7 +237,10 @@ export const fluviaRouter = {
           throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
         }
 
-        await db.update(server).set({ status: "deploying" }).where(eq(server.id, input.id));
+        await db
+          .update(server)
+          .set({ status: "resuming", updatedAt: new Date() })
+          .where(eq(server.id, input.id));
         await CubePathService.powerControlVps(srv.cubePathId, "start_vps");
 
         return { success: true };
@@ -229,7 +256,10 @@ export const fluviaRouter = {
           throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
         }
 
-        await db.update(server).set({ status: "deploying" }).where(eq(server.id, input.id));
+        await db
+          .update(server)
+          .set({ status: "restarting", updatedAt: new Date() })
+          .where(eq(server.id, input.id));
         await CubePathService.powerControlVps(srv.cubePathId, "reboot_vps");
 
         return { success: true };
@@ -268,11 +298,18 @@ export const fluviaRouter = {
           throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
         }
 
+        // New password hash if we reinstalled with the password they just entered
+        const newPasswordHash = CubePathService.hashPassword(input.password);
+
         await db.transaction(async (tx) => {
           await CubePathService.reinstallVps(srv.cubePathId!, input.password);
           await tx
             .update(server)
-            .set({ status: "deploying", updatedAt: new Date() })
+            .set({
+              status: "deploying",
+              passwordHash: newPasswordHash,
+              updatedAt: new Date(),
+            })
             .where(eq(server.id, input.id));
           await tx.delete(workflow).where(eq(workflow.serverId, input.id));
         });
