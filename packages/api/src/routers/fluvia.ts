@@ -175,7 +175,7 @@ export const fluviaRouter = {
             cubePathId,
             status: "deploying",
             passwordHash: passwordHash,
-            url: `https://n8n-${cubePathId.slice(0, 8)}.cubepath.io`,
+            url: `https://vps${cubePathId}.cubepath.net`,
           });
 
           return { id, password };

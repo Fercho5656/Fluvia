@@ -22,6 +22,7 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
+  ExternalLink,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -336,7 +337,7 @@ const stats = computed(() => [
                           ? 'bg-accent animate-pulse'
                           : srv.status === 'stopped'
                             ? 'bg-zinc-600'
-                            : srv.status === 'provisioning'
+                            : srv.status === 'deploying'
                               ? 'bg-orange-400 animate-pulse'
                               : 'bg-rose-500',
                       )
@@ -401,7 +402,15 @@ const stats = computed(() => [
                     class="text-[10px] text-muted-foreground uppercase tracking-tighter font-bold"
                     >Endpoint</span
                   >
-                  <span class="text-xs truncate text-accent font-mono">{{ srv.url }}</span>
+                  <a
+                    :href="srv.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs truncate text-accent font-mono hover:underline hover:text-accent/80 transition-all flex items-center gap-1"
+                  >
+                    {{ srv.url }}
+                    <ExternalLink class="size-3 inline" />
+                  </a>
                 </div>
 
                 <span class="text-[10px] font-mono text-muted-foreground uppercase"
