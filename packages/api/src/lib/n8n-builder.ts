@@ -136,12 +136,11 @@ export class N8NBuilder {
       const typeVersion = Array.isArray(reg.version) ? Math.max(...reg.version) : reg.version;
 
       nodes.push({
-        id: node.id,
         name: node.id,
+        parameters,
         type: reg.type,
         typeVersion,
         position: [index * 300, 300],
-        parameters,
       });
     });
 

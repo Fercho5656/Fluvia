@@ -13,14 +13,12 @@ export class N8NService {
     const fullUrl = `${url}/api/v1/workflows`;
 
     // n8n expects "nodes" and "connections" in the root
+    // Ref: https://docs.n8n.io/api/remote-api/#tag/Workflows/paths/~1workflows/post
     const body = {
       name: params.name,
       nodes: params.n8nJson.nodes || [],
       connections: params.n8nJson.connections || {},
-      active: false,
       settings: params.n8nJson.settings || {},
-      staticData: params.n8nJson.staticData || null,
-      meta: params.n8nJson.meta || {},
     };
 
     console.log(`[n8n] Deploying to ${fullUrl}`);
