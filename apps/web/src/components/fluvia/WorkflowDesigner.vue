@@ -54,7 +54,7 @@ async function fetchInitialData() {
   }
 
   try {
-    workspaces.value = await orpc.fluvia.workspace.list();
+    workspaces.value = await orpc.fluvia.workspace.list({ sync: false });
   } catch (e) {
     console.error("Failed to fetch servers:", e);
   }

@@ -19,89 +19,97 @@ const openrouter = createOpenRouter({
 
 export const fluviaRouter = {
   workspace: {
-    list: protectedProcedure.handler(async ({ context }) => {
-      const userId = context.session.user.id;
-      const workspaces = await db.query.workspace.findMany({
-        where: eq(workspace.agencyId, userId),
-        with: {
-          servers: {
-            with: {
-              workflows: true,
+    list: protectedProcedure
+      .input(z.object({ sync: z.boolean().optional().default(true) }).optional())
+      .handler(async ({ context, input }) => {
+        const userId = context.session.user.id;
+        const workspaces = await db.query.workspace.findMany({
+          where: eq(workspace.agencyId, userId),
+          with: {
+            servers: {
+              with: {
+                workflows: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      let cubePathVpsList: any[] = [];
-      try {
-        cubePathVpsList = await CubePathService.listVps();
-      } catch (e) {
-        console.error("Failed to fetch CubePath VPS list:", e);
-      }
+        const shouldSync = input?.sync ?? true;
 
-      const syncedWorkspaces = await Promise.all(
-        workspaces.map(async (ws) => {
-          if (ws.servers) {
-            ws.servers = await Promise.all(
-              ws.servers.map(async (srv) => {
-                if (!srv.cubePathId || srv.status === "deleting") return srv;
+        let cubePathVpsList: any[] = [];
+        if (shouldSync) {
+          try {
+            cubePathVpsList = await CubePathService.listVps();
+          } catch (e) {
+            console.error("Failed to fetch CubePath VPS list:", e);
+          }
+        }
 
-                const srvCreated = srv.createdAt?.getTime() || 0;
-                const isVeryNew = srvCreated && Date.now() - srvCreated < 30000;
-                if (isVeryNew) return srv;
+        const syncedWorkspaces = await Promise.all(
+          workspaces.map(async (ws) => {
+            if (ws.servers && shouldSync) {
+              ws.servers = await Promise.all(
+                ws.servers.map(async (srv) => {
+                  if (!srv.cubePathId || srv.status === "deleting") return srv;
 
-                const vpsInfo = cubePathVpsList.find(
-                  (v) =>
-                    String(v.id) === srv.cubePathId ||
-                    String(v.vps_id) === srv.cubePathId ||
-                    String(v.vpsid) === srv.cubePathId,
-                );
+                  const srvCreated = srv.createdAt?.getTime() || 0;
+                  const isVeryNew = srvCreated && Date.now() - srvCreated < 30000;
+                  if (isVeryNew) return srv;
 
-                if (vpsInfo) {
-                  const rawStatus = String(vpsInfo.status || "").toLowerCase();
-                  if (["active", "stopped", "deploying", "deleting", "error"].includes(rawStatus)) {
-                    let mappedStatus = rawStatus as typeof srv.status;
+                  const vpsInfo = cubePathVpsList.find(
+                    (v) =>
+                      String(v.id) === srv.cubePathId ||
+                      String(v.vps_id) === srv.cubePathId ||
+                      String(v.vpsid) === srv.cubePathId,
+                  );
 
-                    const isTransitional = ["stopping", "resuming", "restarting"].includes(
-                      srv.status,
-                    );
-                    if (isTransitional) {
-                      const timeSinceUpdate = srv.updatedAt
-                        ? Date.now() - srv.updatedAt.getTime()
-                        : 0;
-                      const isRecent = timeSinceUpdate < 60000;
+                  if (vpsInfo) {
+                    const rawStatus = String(vpsInfo.status || "").toLowerCase();
+                    if (
+                      ["active", "stopped", "deploying", "deleting", "error"].includes(rawStatus)
+                    ) {
+                      let mappedStatus = rawStatus as typeof srv.status;
 
-                      if (isRecent) {
-                        if (srv.status === "stopping" && mappedStatus !== "stopped") {
-                          mappedStatus = "stopping";
-                        } else if (
-                          ["resuming", "restarting"].includes(srv.status) &&
-                          mappedStatus !== "active"
-                        ) {
-                          mappedStatus = srv.status;
+                      const isTransitional = ["stopping", "resuming", "restarting"].includes(
+                        srv.status,
+                      );
+                      if (isTransitional) {
+                        const timeSinceUpdate = srv.updatedAt
+                          ? Date.now() - srv.updatedAt.getTime()
+                          : 0;
+                        const isRecent = timeSinceUpdate < 60000;
+
+                        if (isRecent) {
+                          if (srv.status === "stopping" && mappedStatus !== "stopped") {
+                            mappedStatus = "stopping";
+                          } else if (
+                            ["resuming", "restarting"].includes(srv.status) &&
+                            mappedStatus !== "active"
+                          ) {
+                            mappedStatus = srv.status;
+                          }
                         }
                       }
-                    }
 
-                    if (mappedStatus !== srv.status) {
-                      await db
-                        .update(server)
-                        .set({ status: mappedStatus })
-                        .where(eq(server.id, srv.id));
-                      srv.status = mappedStatus;
+                      if (mappedStatus !== srv.status) {
+                        await db
+                          .update(server)
+                          .set({ status: mappedStatus })
+                          .where(eq(server.id, srv.id));
+                        srv.status = mappedStatus;
+                      }
                     }
                   }
-                }
-                return srv;
-              }),
-            );
-          }
-          return ws;
-        }),
-      );
+                  return srv;
+                }),
+              );
+            }
+            return ws;
+          }),
+        );
 
-      return syncedWorkspaces;
-    }),
+        return syncedWorkspaces;
+      }),
 
     create: protectedProcedure
       .input(z.object({ name: z.string().min(1) }))
