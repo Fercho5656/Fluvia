@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { orpc } from "@/lib/orpc";
 import {
   Terminal,
@@ -11,6 +11,7 @@ import {
   Sparkles,
   Save,
   ChevronDown,
+  ShieldCheck,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,14 @@ const workspaces = ref<any[]>([]);
 const selectedServerId = ref("");
 const showDeployMenu = ref(false);
 const deploySuccess = ref(false);
+
+const selectedServerUrl = computed(() => {
+  if (!selectedServerId.value) return null;
+  const srv = workspaces.value
+    .flatMap((ws) => ws.servers || [])
+    .find((s) => s.id === selectedServerId.value);
+  return srv?.url?.split("//")[1] || null;
+});
 
 async function fetchInitialData() {
   if (savedWorkflowId.value) {
@@ -101,23 +110,45 @@ async function saveBlueprint() {
 async function deployToSelectedServer() {
   if (!selectedServerId.value || !generatedJson.value || isDeploying.value) return;
 
-  // Auto-save before deploy if it's new
+  // 1. Check if server has API Key configured
+  const selectedServer = workspaces.value
+    .flatMap((ws) => ws.servers || [])
+    .find((s) => s.id === selectedServerId.value);
+
+  if (!selectedServer?.n8nApiKey) {
+    if (
+      confirm(
+        "This server doesn't have an n8n API Key configured. You need to add it in the Dashboard first. Go there now?",
+      )
+    ) {
+      window.location.href = "/dashboard";
+    }
+    return;
+  }
+
+  // 2. Auto-save before deploy if it's new
   if (!savedWorkflowId.value) {
     await saveBlueprint();
   }
 
   isDeploying.value = true;
   try {
-    await orpc.fluvia.workflow.deploy({
+    const result = await orpc.fluvia.workflow.deploy({
       serverId: selectedServerId.value,
       customWorkflowId: savedWorkflowId.value!,
       name: workflowName.value,
       n8nJson: generatedJson.value,
     });
-    deploySuccess.value = true;
-    showDeployMenu.value = false;
-  } catch (error) {
+
+    if (result.pushedToRealN8n) {
+      deploySuccess.value = true;
+      showDeployMenu.value = false;
+    } else {
+      alert("Workflow saved locally but couldn't be pushed to n8n instance.");
+    }
+  } catch (error: any) {
     console.error("Deployment failed:", error);
+    alert(error.message || "Failed to deploy workflow to n8n.");
   } finally {
     isDeploying.value = false;
   }
@@ -262,7 +293,7 @@ onMounted(fetchInitialData);
                   @click="showDeployMenu = !showDeployMenu"
                   class="flex items-center gap-2 text-sm font-medium text-white/80 hover:text-white"
                 >
-                  {{ selectedServerId ? "Selected Server" : "Select Target Server" }}
+                  {{ selectedServerUrl || "Select Target Server" }}
                   <ChevronDown class="size-4" />
                 </button>
 
@@ -288,18 +319,27 @@ onMounted(fetchInitialData);
                       "
                       class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center justify-between"
                     >
-                      <span
-                        :class="
-                          selectedServerId === srv.id
-                            ? 'text-white font-bold'
-                            : 'text-muted-foreground'
-                        "
-                      >
-                        {{ srv.url.split("//")[1] }}
-                      </span>
+                      <div class="flex items-center gap-2 overflow-hidden">
+                        <span
+                          :class="
+                            cn(
+                              'truncate',
+                              selectedServerId === srv.id
+                                ? 'text-white font-bold'
+                                : 'text-muted-foreground',
+                            )
+                          "
+                        >
+                          {{ srv.url.split("//")[1] }}
+                        </span>
+                        <ShieldCheck
+                          v-if="srv.n8nApiKey"
+                          class="size-3 text-emerald-400 shrink-0"
+                        />
+                      </div>
                       <div
                         v-if="selectedServerId === srv.id"
-                        class="size-1.5 rounded-full bg-primary"
+                        class="size-1.5 rounded-full bg-primary shrink-0"
                       ></div>
                     </button>
                   </div>

@@ -148,6 +148,36 @@ async function provisionServer(workspaceName: string, workspaceId: string) {
   }
 }
 
+// n8n Settings State
+const showSettingsModal = ref(false);
+const settingsServerId = ref<string | null>(null);
+const n8nApiKey = ref("");
+const savingSettings = ref(false);
+
+function openSettingsModal(srv: any) {
+  settingsServerId.value = srv.id;
+  n8nApiKey.value = srv.n8nApiKey || "";
+  showSettingsModal.value = true;
+  activeMenuId.value = null;
+}
+
+async function saveServerSettings() {
+  if (!settingsServerId.value) return;
+  savingSettings.value = true;
+  try {
+    await orpc.fluvia.server.saveSettings({
+      id: settingsServerId.value,
+      n8nApiKey: n8nApiKey.value,
+    });
+    showSettingsModal.value = false;
+    await fetchWorkspaces();
+  } catch (error) {
+    console.error("Failed to save settings:", error);
+  } finally {
+    savingSettings.value = false;
+  }
+}
+
 function copyPassword() {
   navigator.clipboard.writeText(generatedPassword.value);
 }
@@ -438,6 +468,12 @@ const stats = computed(() => [
                     >
                       <RotateCw class="size-3" /> Restart
                     </button>
+                    <button
+                      @click="openSettingsModal(srv)"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                    >
+                      <Settings class="size-3" /> n8n API Key
+                    </button>
                     <div class="h-px bg-white/5 my-1"></div>
                     <button
                       @click="openActionModal('reinstall', srv.id, 'Reinstall')"
@@ -638,6 +674,60 @@ const stats = computed(() => [
           >
             <Loader2 v-if="actionLoading" class="size-4 animate-spin" />
             Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- n8n Settings Modal -->
+    <div
+      v-if="showSettingsModal"
+      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border-white/10 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <Settings class="size-5 text-primary" />
+            n8n Configuration
+          </h3>
+          <button @click="showSettingsModal = false" class="p-1 hover:bg-white/5 rounded-lg">
+            <X class="size-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        <p class="text-xs text-muted-foreground leading-relaxed">
+          Enter your n8n **Public API Key**. You can generate this in your n8n instance under
+          **Settings > Public API**.
+        </p>
+
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <label class="text-[10px] uppercase tracking-widest text-muted-foreground font-bold"
+              >API Key</label
+            >
+            <input
+              v-model="n8nApiKey"
+              type="password"
+              placeholder="n8n_api_..."
+              class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+            />
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button
+            @click="showSettingsModal = false"
+            class="flex-1 bg-white/5 hover:bg-white/10 text-white text-sm py-2.5 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveServerSettings"
+            :disabled="savingSettings || !n8nApiKey"
+            class="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+          >
+            <Loader2 v-if="savingSettings" class="size-4 animate-spin" />
+            Save Key
           </button>
         </div>
       </div>

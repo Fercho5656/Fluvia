@@ -4,11 +4,14 @@ import { db } from "@my-better-t-app/db";
 import { workspace, server, workflow, customWorkflow } from "@my-better-t-app/db/schema/fluvia";
 import { env } from "@my-better-t-app/env/server";
 import { CubePathService } from "../services/cubepath";
+import { N8NService } from "../services/n8n";
+import { N8NBuilder } from "../lib/n8n-builder";
 import { ORPCError } from "@orpc/server";
 import { generateText } from "ai";
 import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
+import { SHORT_SYSTEM_PROMPT as SYSTEM_PROMPT } from "../const";
 
 const openrouter = createOpenRouter({
   apiKey: env.OPENROUTER_API_KEY,
@@ -59,7 +62,6 @@ export const fluviaRouter = {
                   if (["active", "stopped", "deploying", "deleting", "error"].includes(rawStatus)) {
                     let mappedStatus = rawStatus as typeof srv.status;
 
-                    // Handle "fake" transitional states
                     const isTransitional = ["stopping", "resuming", "restarting"].includes(
                       srv.status,
                     );
@@ -67,10 +69,9 @@ export const fluviaRouter = {
                       const timeSinceUpdate = srv.updatedAt
                         ? Date.now() - srv.updatedAt.getTime()
                         : 0;
-                      const isRecent = timeSinceUpdate < 60000; // 1 minute grace period
+                      const isRecent = timeSinceUpdate < 60000;
 
                       if (isRecent) {
-                        // Only transition if CubePath confirms the expected end state
                         if (srv.status === "stopping" && mappedStatus !== "stopped") {
                           mappedStatus = "stopping";
                         } else if (
@@ -298,7 +299,6 @@ export const fluviaRouter = {
           throw new ORPCError("UNAUTHORIZED", { message: "Invalid VPS password" });
         }
 
-        // New password hash if we reinstalled with the password they just entered
         const newPasswordHash = CubePathService.hashPassword(input.password);
 
         await db.transaction(async (tx) => {
@@ -313,6 +313,21 @@ export const fluviaRouter = {
             .where(eq(server.id, input.id));
           await tx.delete(workflow).where(eq(workflow.serverId, input.id));
         });
+        return { success: true };
+      }),
+
+    saveSettings: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          n8nApiKey: z.string().min(1),
+        }),
+      )
+      .handler(async ({ input }) => {
+        await db
+          .update(server)
+          .set({ n8nApiKey: input.n8nApiKey, updatedAt: new Date() })
+          .where(eq(server.id, input.id));
         return { success: true };
       }),
   },
@@ -410,29 +425,29 @@ export const fluviaRouter = {
       )
       .handler(async ({ input }) => {
         const { text } = await generateText({
-          model: openrouter("anthropic/claude-3.5-sonnet"),
-          system: `You are an expert in n8n automation. 
-          Your task is to generate valid n8n workflow JSON based on the user's description.
-          Output ONLY the JSON. No explanations, no markdown blocks. 
-          The JSON must be a valid n8n workflow structure with "nodes" and "connections".`,
+          model: openrouter("nvidia/nemotron-3-nano-30b-a3b:free"),
+          system: SYSTEM_PROMPT,
           prompt: input.prompt,
         });
 
-        let n8nJson;
         try {
           const cleanedText = text
             .replace(/```json/g, "")
             .replace(/```/g, "")
             .trim();
-          n8nJson = JSON.parse(cleanedText);
+
+          const blueprint = JSON.parse(cleanedText);
+
+          // Expand high-level blueprint into full n8n JSON
+          const n8nJson = N8NBuilder.build(blueprint);
+
+          return { n8nJson };
         } catch (e) {
           throw new ORPCError("INTERNAL_SERVER_ERROR", {
-            message: "Failed to generate valid n8n JSON",
+            message: "Failed to generate valid n8n JSON from AI blueprint",
             cause: e,
           });
         }
-
-        return { n8nJson };
       }),
 
     deploy: protectedProcedure
@@ -445,17 +460,41 @@ export const fluviaRouter = {
         }),
       )
       .handler(async ({ input }) => {
+        // 1. Get the server to check for API key
+        const srv = await db.query.server.findFirst({
+          where: eq(server.id, input.serverId),
+        });
+
+        if (!srv || !srv.url) throw new ORPCError("NOT_FOUND", { message: "Server not found" });
+
+        // 2. If API key exists, push to real n8n
+        if (srv.n8nApiKey) {
+          try {
+            await N8NService.deployWorkflow({
+              baseUrl: srv.url,
+              apiKey: srv.n8nApiKey,
+              name: input.name,
+              n8nJson: input.n8nJson,
+            });
+          } catch (e: any) {
+            throw new ORPCError("INTERNAL_SERVER_ERROR", {
+              message: `Real n8n deployment failed: ${e.message}. Please check your API key and server connection.`,
+            });
+          }
+        }
+
+        // 3. Local record keeping (Snapshot)
         const id = randomUUID();
         await db.insert(workflow).values({
           id,
           serverId: input.serverId,
           customWorkflowId: input.customWorkflowId,
           name: input.name,
-          n8nJson: input.n8nJson, // Snapshot
+          n8nJson: input.n8nJson,
           status: "active",
         });
 
-        return { id, success: true };
+        return { id, success: true, pushedToRealN8n: !!srv.n8nApiKey };
       }),
   },
 };
