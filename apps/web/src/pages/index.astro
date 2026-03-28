@@ -1,129 +1,297 @@
 ---
 import Layout from "@/layouts/Layout.astro";
+import Button from "@/components/ui/Button.astro";
+import Badge from "@/components/ui/Badge.astro";
+import Card from "@/components/ui/Card.astro";
+import LandingAiShowcase from "@/components/fluvia/LandingAiShowcase.vue";
 
 const user = Astro.locals.user;
 
 if (user) {
   return Astro.redirect("/dashboard");
 }
-
-const TITLE_TEXT = `
- ███████╗██╗     ██╗   ██╗██╗   ██╗██╗ █████╗ 
- ██╔════╝██║     ██║   ██║██║   ██║██║██╔══██╗
- █████╗  ██║     ██║   ██║██║   ██║██║███████║
- ██╔══╝  ██║     ██║   ██║╚██╗ ██╔╝██║██╔══██║
- ██║     ███████╗╚██████╔╝ ╚████╔╝ ██║██║  ██║
- ╚═╝     ╚══════╝ ╚═════╝   ╚═══╝  ╚═╝╚═╝  ╚═╝
- 
-    AI-POWERED AUTOMATION INFRASTRUCTURE
- `;
 ---
 
-<Layout title="Fluvia - AI Automation Infrastructure">
-  <div class="container mx-auto max-w-4xl px-4 py-12 md:py-24">
-    <div class="flex flex-col items-center text-center space-y-8">
-      <pre
-        class="overflow-x-auto font-mono text-[10px] md:text-sm text-primary leading-tight">{TITLE_TEXT}</pre>
-
-      <div class="space-y-4 max-w-2xl">
-        <h1 class="text-5xl md:text-6xl font-black tracking-tighter text-white">
-          Deploy automation <span class="text-primary">at scale.</span>
+<Layout title="Fluvia | Instant n8n Infrastructure for Agencies">
+  <main>
+    <!-- Hero Section -->
+    <section
+      id="hero-section"
+      class="relative min-h-[90vh] flex flex-col items-center justify-start overflow-hidden px-8 pt-54"
+    >
+      <div
+        class="absolute inset-0 bg-lineal-to-b from-primary-container/10 to-transparent pointer-events-none"
+      >
+      </div>
+      <div
+        class="max-w-4xl mx-auto text-center z-20 relative mb-16 hero-content"
+      >
+        <Badge variant="primary" class="mb-6 opacity-0">
+          The Instant n8n Infrastructure
+        </Badge>
+        <h1
+          class="font-headline text-5xl md:text-7xl font-extrabold tracking-tighter text-on-surface mb-8 leading-[1.1] opacity-0"
+        >
+          Deploy automation <br />
+          <span class="text-primary-container">at scale</span>
         </h1>
-        <p class="text-xl text-muted-foreground">
-          The infrastructure layer for agencies. Provision CubePath servers,
-          generate n8n workflows with AI, and manage client automations from a
-          single command center.
+        <p
+          class="font-body text-lg md:text-xl text-on-surface-variant max-w-2xl mx-auto mb-12 leading-relaxed opacity-0"
+        >
+          Launch dedicated n8n instances for every client with a single click.
+          No DevOps experience required. Build complex logic using natural
+          language with our built-in AI Architect.
+        </p>
+        <div
+          class="flex flex-col md:flex-row items-center justify-center gap-6 opacity-0 hero-actions"
+        >
+          <Button href="/signup" size="lg" class="w-full md:w-auto">
+            Launch Instance
+          </Button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features-section" class="py-24 px-8 bg-surface">
+      <div class="max-w-7xl mx-auto">
+        <div class="max-w-2xl mb-16 feature-header opacity-0">
+          <h2
+            class="font-headline text-4xl font-bold tracking-tight text-on-surface mb-6"
+          >
+            Engineered for ease, built for scale.
+          </h2>
+          <p class="text-on-surface-variant text-lg">
+            We've removed the technical hurdles of self-hosting n8n, giving you
+            the power to manage dozens of clients without the server headaches.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+          <!-- CubePath Provisioning -->
+          <Card variant="low" class="p-1 feature-card opacity-0">
+            <div
+              class="bg-surface-container-low rounded-lg p-10 h-full flex flex-col group"
+            >
+              <div>
+                <div
+                  class="w-14 h-14 bg-primary-container/10 rounded-lg flex items-center justify-center mb-8 border border-primary-container/20"
+                >
+                  <span
+                    class="material-symbols-outlined text-primary-container text-3xl"
+                    >view_in_ar</span
+                  >
+                </div>
+                <h3
+                  class="font-headline text-3xl font-bold text-on-surface mb-4"
+                >
+                  CubePath Provisioning
+                </h3>
+                <p class="font-body text-on-surface-variant text-lg mb-8">
+                  Deploy fully-isolated n8n instances for each of your clients
+                  with one click. We handle the SSL, database, and
+                  infrastructure management so you don't have to.
+                </p>
+              </div>
+              <!-- Fixed height container matching the AI card's total visual height -->
+              <div
+                class="relative h-120 rounded-xl overflow-hidden border border-outline-variant/10 shadow-2xl mt-auto"
+              >
+                <img
+                  class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                  alt="abstract digital 3D visualization"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAQ8q9g6nz2DFfT40HmpMtdYBiy6Z4R-eQATk4UhDDMHgjdYJ1LTjJ2JQkOIp92-roMCbcbh76AcSWarue4njHh4bYz7dz21ODpFIgbhfocbWp5iSjJetJzp-lqAn8FP4iYgPEQkvM15qIc5WEyQZqbx5Yzwh9NDTzIMGJboOkbaY3XCeKw4iiWNqpde5woLrHZ1wUkFdBVeymyBIy_oU1JqFzD6n7SHkIgk0jXYFu3x7OUB5te28he73cQc-0K-jgrw-JrZbvxNP7"
+                />
+                <div
+                  class="absolute inset-0 bg-primary-container/5 mix-blend-overlay"
+                >
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <!-- AI Workflow Agent -->
+          <Card variant="low" class="p-1 feature-card opacity-0">
+            <div
+              class="bg-surface-container-low rounded-lg p-10 h-full flex flex-col group"
+            >
+              <div>
+                <div
+                  class="w-14 h-14 bg-primary-container/10 rounded-lg flex items-center justify-center mb-8 border border-primary-container/20"
+                >
+                  <span
+                    class="material-symbols-outlined text-primary-container text-3xl"
+                    >psychology</span
+                  >
+                </div>
+                <h3
+                  class="font-headline text-3xl font-bold text-on-surface mb-4"
+                >
+                  AI Workflow Architect
+                </h3>
+                <p class="font-body text-on-surface-variant text-lg mb-8">
+                  Simply describe what you want to achieve. Our AI designer
+                  generates the workflow JSON ready to be imported into your
+                  instance. Zero-tech experience required.
+                </p>
+              </div>
+              <!-- Fixed height container matching the CubePath card -->
+              <div
+                class="h-120 bg-surface-container-lowest rounded-xl border border-outline-variant/10 p-8 font-mono text-sm relative overflow-hidden mt-auto"
+              >
+                <div
+                  class="flex items-center gap-2 mb-4 text-primary-container"
+                >
+                  <span
+                    class="w-2 h-2 rounded-full bg-primary-container animate-pulse"
+                  ></span>
+                  <span class="text-xs font-bold tracking-widest uppercase"
+                    >AI_ENGINE_READY</span
+                  >
+                </div>
+                <p class="text-on-surface/40 leading-relaxed mb-4">
+                  "Connect Shopify to Google Sheets and send a Slack
+                  notification whenever an order over $100 is placed."
+                </p>
+                <div class="w-full h-px bg-outline-variant/20 mb-4"></div>
+
+                <LandingAiShowcase client:visible />
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-32 px-8">
+      <Card
+        variant="low"
+        id="cta-section"
+        class="max-w-5xl mx-auto p-12 md:p-20 text-center relative opacity-0"
+      >
+        <div
+          class="absolute inset-0 bg-lineal-to-tr from-primary-container/10 via-transparent to-transparent"
+        >
+        </div>
+        <h2
+          class="font-headline text-4xl md:text-5xl font-extrabold text-on-surface mb-8 relative z-10"
+        >
+          Start deploying today.
+        </h2>
+        <p class="text-on-surface-variant mb-12 relative z-10 max-w-xl mx-auto">
+          No credit card required to explore the dashboard. Deploy your first
+          client instance in under 60 seconds.
+        </p>
+        <div
+          class="flex flex-col md:flex-row items-center justify-center gap-4 relative z-10"
+        >
+          <Button href="/signup" size="lg">Get Started Free</Button>
+        </div>
+      </Card>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer
+    class="bg-surface-container-lowest w-full py-12 px-8 border-t border-surface-container-low"
+  >
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-7xl mx-auto mb-12">
+      <div>
+        <div class="text-xl font-bold text-on-surface font-headline mb-6">
+          Fluvia
+        </div>
+        <p
+          class="font-body text-sm text-on-surface-variant max-w-xs leading-relaxed"
+        >
+          The agency-first infrastructure layer for seamless n8n deployment and
+          AI-driven automation.
         </p>
       </div>
-
-      <div class="flex gap-4 pt-4">
+    </div>
+    <div
+      class="max-w-7xl mx-auto pt-12 border-t border-surface-container-low flex flex-col md:flex-row justify-between items-center gap-6"
+    >
+      <p class="font-body text-sm text-on-surface-variant">
+        Midudev & CubePath - 2026 Hackathon
+      </p>
+      <div class="flex gap-6">
         <a
-          href="/fluvia"
-          class="bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-2xl shadow-primary/20"
+          class="text-on-surface-variant hover:text-on-surface transition-colors"
+          href="https://github.com/Fercho5656/Fluvia"
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          Open Agency Command
+          <span class="material-symbols-outlined">code</span>
         </a>
-        <a
-          href="/login"
-          class="bg-surface-elevated hover:bg-surface-highest border border-border text-white px-8 py-4 rounded-xl font-bold text-lg transition-all"
-        >
-          Sign In
-        </a>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full pt-12">
-        <div class="glass-panel p-6 rounded-2xl text-left space-y-3">
-          <div
-            class="size-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="size-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              ><path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-              ></path></svg
-            >
-          </div>
-          <h3 class="font-bold text-white">CubePath Provisioning</h3>
-          <p class="text-sm text-muted-foreground">
-            One-click deployment of dedicated automation servers for every
-            client workspace.
-          </p>
-        </div>
-        <div class="glass-panel p-6 rounded-2xl text-left space-y-3">
-          <div
-            class="size-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="size-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              ><path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg
-            >
-          </div>
-          <h3 class="font-bold text-white">AI Workflow Agent</h3>
-          <p class="text-sm text-muted-foreground">
-            Describe your business logic in plain English. We'll generate the
-            n8n JSON automatically.
-          </p>
-        </div>
-        <div class="glass-panel p-6 rounded-2xl text-left space-y-3">
-          <div
-            class="size-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="size-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              ><path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.040L3 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622l-.982-3.016z"
-              ></path></svg
-            >
-          </div>
-          <h3 class="font-bold text-white">Agency Multi-tenancy</h3>
-          <p class="text-sm text-muted-foreground">
-            Securely manage multiple client environments from a single unified
-            interface.
-          </p>
-        </div>
       </div>
     </div>
-  </div>
+  </footer>
+
+  <script>
+    import { gsap } from "gsap";
+    import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Initial Hero Animation
+    const tl = gsap.timeline();
+    tl.to(".hero-content > *", {
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      stagger: 0.1,
+      ease: "power2.out",
+      startAt: { y: 20 },
+    }).to(
+      ".hero-image",
+      {
+        opacity: 1,
+        y: 0,
+        duration: 1,
+        ease: "power2.out",
+        startAt: { y: 40 },
+      },
+      "-=0.6",
+    );
+
+    // Features Section Entrance
+    gsap.to(".feature-header", {
+      scrollTrigger: {
+        trigger: "#features-section",
+        start: "top 80%",
+      },
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      ease: "power2.out",
+      startAt: { y: 30 },
+    });
+
+    gsap.to(".feature-card", {
+      scrollTrigger: {
+        trigger: ".feature-card",
+        start: "top 85%",
+      },
+      opacity: 1,
+      y: 0,
+      duration: 0.8,
+      stagger: 0.2,
+      ease: "power2.out",
+      startAt: { y: 40 },
+    });
+
+    // CTA Section Subtle Reveal
+    gsap.to("#cta-section", {
+      scrollTrigger: {
+        trigger: "#cta-section",
+        start: "top 90%",
+      },
+      opacity: 1,
+      scale: 1,
+      duration: 1,
+      ease: "power2.out",
+      startAt: { scale: 0.95 },
+    });
+  </script>
 </Layout>

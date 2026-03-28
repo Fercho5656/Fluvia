@@ -1,0 +1,85 @@
+{
+  "nodes": [
+    {
+      "name": "wh_shopify",
+      "parameters": {
+        "path": "/shopify_order",
+        "httpMethod": "ORDER_CREATE"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 300]
+    },
+    {
+      "name": "filter_amount",
+      "parameters": {
+        "condition": "={{$json.total_price}} > 100",
+        "operation": "filter"
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [300, 300]
+    },
+    {
+      "name": "gs_write",
+      "parameters": {
+        "spreadsheet_id": "YOUR_SPREADSHEET_ID",
+        "range": "Sheet1!A:B",
+        "values": "={{$json.order_id}},{{$json.total_price}}",
+        "operation": "append_rows",
+        "resource": "sheet"
+      },
+      "type": "n8n-nodes-base.googleSheetsV2",
+      "typeVersion": 4.7,
+      "position": [600, 300]
+    },
+    {
+      "name": "slack_notify",
+      "parameters": {
+        "channel": "#orders",
+        "text": "🚨 New order > $100: *{{$json.order_id}}* - ${{$json.total_price}}",
+        "operation": "send_message",
+        "resource": "message"
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "wh_shopify": {
+      "main": [
+        [
+          {
+            "node": "filter_amount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter_amount": {
+      "main": [
+        [
+          {
+            "node": "gs_write",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "slack_notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "ai-designer-v2"
+  }
+}

@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
+import JsonViewer from "@/components/ui/JsonViewer.vue";
 
 const props = defineProps<{
   initialWorkflowId?: string;
@@ -154,10 +155,6 @@ async function deployToSelectedServer() {
   }
 }
 
-function formatJson(json: any) {
-  return JSON.stringify(json, null, 2);
-}
-
 onMounted(fetchInitialData);
 </script>
 
@@ -268,9 +265,11 @@ onMounted(fetchInitialData);
               </div>
             </div>
 
-            <div v-if="generatedJson" class="terminal-view whitespace-pre">
-              <pre class="text-muted-foreground">{{ formatJson(generatedJson) }}</pre>
-            </div>
+            <JsonViewer
+              v-if="generatedJson"
+              :data="generatedJson"
+              class="flex-1 bg-transparent border-none p-0"
+            />
             <div
               v-else
               class="h-full flex flex-col items-center justify-center text-center opacity-30 grayscale"
