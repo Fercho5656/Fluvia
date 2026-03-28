@@ -9,6 +9,9 @@ import vue from "@astrojs/vue";
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
+  server: ({command}) => ({
+    host: command === "dev" ? "127.0.0.1" : "0.0.0.0"
+  }),
 
   vite: {
     plugins: [tailwindcss()],
