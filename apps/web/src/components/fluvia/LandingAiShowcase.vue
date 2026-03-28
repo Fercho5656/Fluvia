@@ -29,16 +29,18 @@ const startGeneration = () => {
     >
       <button
         @click="startGeneration"
-        class="group relative px-6 py-3 bg-primary-container text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all hover:bg-inverse-primary hover:-translate-y-0.5 active:scale-95 shadow-xl shadow-primary-container/20"
+        class="mt-auto group relative px-6 py-3 bg-primary-container text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all hover:bg-inverse-primary hover:-translate-y-0.5 active:scale-95 shadow-xl shadow-primary-container/20"
       >
         <div class="flex items-center gap-3">
           <Cpu class="size-4 group-hover:rotate-12 transition-transform" />
           <span>Generate Blueprint</span>
         </div>
       </button>
-      <p class="mt-4 text-[10px] text-on-surface-variant uppercase tracking-[0.2em] opacity-50">
-        Click to see the AI in action
-      </p>
+      <p class="mt-4 text-[10px] uppercase tracking-[0.2em]">Click to see the AI in action</p>
+      <small class="mt-auto text-on-surface-variant tracking-[0.2em] opacity-50">
+        *This is a demo showcasing the potential of AI-generated n8n workflows. No real AI is being
+        called.
+      </small>
     </div>
 
     <!-- Generating State -->
