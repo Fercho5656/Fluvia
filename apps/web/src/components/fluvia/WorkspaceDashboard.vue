@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from "vue";
 import { orpc } from "@/lib/orpc";
+import { toastStore } from "@/lib/toast-store";
 import {
   Plus,
   Server,
@@ -63,6 +64,7 @@ const actionLoading = ref(false);
 const actionError = ref("");
 
 const settingsServerId = ref<string | null>(null);
+const settingsServerUrl = ref<string | null>(null);
 const n8nApiKey = ref("");
 const savingSettings = ref(false);
 
@@ -131,11 +133,13 @@ async function createWorkspace() {
   creating.value = true;
   try {
     await orpc.fluvia.workspace.create({ name: newWorkspaceName.value });
+    toastStore.info(`Workspace "${newWorkspaceName.value}" created successfully.`);
     newWorkspaceName.value = "";
     showAddClientModal.value = false;
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to create workspace:", error);
+    toastStore.error("Failed to create workspace.");
   } finally {
     creating.value = false;
   }
@@ -148,10 +152,11 @@ async function provisionServer(workspaceName: string, workspaceId: string) {
     generatedPassword.value = result.password;
     showProvisionModal.value = true;
     passwordConfirmed.value = false;
+    toastStore.info("Server provisioning started.");
     await fetchWorkspaces();
   } catch (error: any) {
     console.error("Failed to provision server:", error);
-    alert(error.message || "Failed to provision server.");
+    toastStore.error(error.message || "Failed to provision server.");
   } finally {
     provisioningWorkspaceId.value = null;
   }
@@ -159,6 +164,7 @@ async function provisionServer(workspaceName: string, workspaceId: string) {
 
 function openSettingsModal(srv: any) {
   settingsServerId.value = srv.id;
+  settingsServerUrl.value = srv.url;
   n8nApiKey.value = srv.n8nApiKey || "";
   showSettingsModal.value = true;
 }
@@ -172,9 +178,11 @@ async function saveServerSettings() {
       n8nApiKey: n8nApiKey.value,
     });
     showSettingsModal.value = false;
+    toastStore.info("API Key saved successfully.");
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to save settings:", error);
+    toastStore.error("Failed to save API Key.");
   } finally {
     savingSettings.value = false;
   }
@@ -193,7 +201,7 @@ async function executeAction() {
   actionError.value = "";
 
   try {
-    const { type, id } = currentAction.value;
+    const { type, id, label } = currentAction.value;
     const payload = { id, password: actionPassword.value };
 
     if (type === "stop") await orpc.fluvia.server.stop(payload);
@@ -201,6 +209,8 @@ async function executeAction() {
     else if (type === "restart") await orpc.fluvia.server.restart(payload);
     else if (type === "delete") await orpc.fluvia.server.delete(payload);
     else if (type === "reinstall") await orpc.fluvia.server.reinstall(payload);
+
+    toastStore.info(`Action "${label}" executed successfully.`);
 
     if (["stop", "resume", "restart"].includes(type)) {
       expectingStaticTransition.value = true;
@@ -215,6 +225,7 @@ async function executeAction() {
     await fetchWorkspaces();
   } catch (error: any) {
     actionError.value = error.message || "Invalid password or server error.";
+    toastStore.error(actionError.value);
   } finally {
     actionLoading.value = false;
   }
@@ -232,10 +243,12 @@ async function saveWorkspaceName() {
       id: editingWorkspaceId.value,
       name: editNameValue.value,
     });
+    toastStore.info("Workspace updated.");
     editingWorkspaceId.value = null;
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to update workspace:", error);
+    toastStore.error("Failed to update workspace.");
   }
 }
 
@@ -244,9 +257,11 @@ async function deleteWorkspace(id: string) {
     return;
   try {
     await orpc.fluvia.workspace.delete({ id });
+    toastStore.warn("Workspace deleted.");
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to delete workspace:", error);
+    toastStore.error("Failed to delete workspace.");
   }
 }
 
@@ -735,6 +750,16 @@ const vFocus = {
           </div>
           <p class="text-xs text-on-surface/40">
             Enter your n8n Public API Key to enable AI deployments.
+            <template v-if="settingsServerUrl">
+              <br />
+              <a
+                :href="`${settingsServerUrl}/settings/api`"
+                target="_blank"
+                class="text-primary hover:underline inline-flex items-center gap-1 mt-2 font-bold"
+              >
+                Get it from your instance <ExternalLink class="size-3" />
+              </a>
+            </template>
           </p>
         </div>
         <div class="space-y-2">

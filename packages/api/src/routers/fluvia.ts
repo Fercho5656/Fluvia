@@ -269,7 +269,7 @@ export const fluviaRouter = {
           .update(server)
           .set({ status: "restarting", updatedAt: new Date() })
           .where(eq(server.id, input.id));
-        await CubePathService.powerControlVps(srv.cubePathId, "reboot_vps");
+        await CubePathService.powerControlVps(srv.cubePathId, "restart_vps");
 
         return { success: true };
       }),

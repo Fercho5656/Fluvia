@@ -51,6 +51,7 @@ import { authClient } from "@/lib/auth-client";
 
 <script>
   import { authClient } from "@/lib/auth-client";
+  import { toastStore } from "@/lib/toast-store";
 
   const form = document.getElementById("signin-form") as HTMLFormElement;
   const emailInput = document.getElementById("email") as HTMLInputElement;
@@ -76,14 +77,18 @@ import { authClient } from "@/lib/auth-client";
             window.location.href = "/dashboard";
           },
           onError: (ctx) => {
-            formError.textContent = ctx.error.message || "Sign in failed. Please try again.";
+            const message = ctx.error.message || "Sign in failed. Please try again.";
+            formError.textContent = message;
             formError.classList.remove("hidden");
+            toastStore.error(message);
           },
         }
       );
     } catch (error) {
-      formError.textContent = "An unexpected error occurred.";
+      const message = "An unexpected error occurred.";
+      formError.textContent = message;
       formError.classList.remove("hidden");
+      toastStore.error(message);
     } finally {
       submitButton.disabled = false;
       submitButton.textContent = "Sign In";

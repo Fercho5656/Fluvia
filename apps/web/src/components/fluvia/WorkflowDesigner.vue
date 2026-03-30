@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
 import { orpc } from "@/lib/orpc";
+import { toastStore } from "@/lib/toast-store";
 import {
   Terminal,
   CloudUpload,
@@ -74,8 +75,10 @@ async function generateWorkflow() {
       name: workflowName.value,
     });
     generatedJson.value = result.n8nJson;
+    toastStore.info("Workflow blueprint generated.");
   } catch (error) {
     console.error("Generation failed:", error);
+    toastStore.error("Failed to generate workflow.");
   } finally {
     isGenerating.value = false;
   }
@@ -93,6 +96,7 @@ async function saveBlueprint() {
         n8nJson: generatedJson.value,
         description: prompt.value,
       });
+      toastStore.info("Blueprint updated.");
     } else {
       const result = await orpc.fluvia.customWorkflow.create({
         name: workflowName.value,
@@ -100,9 +104,11 @@ async function saveBlueprint() {
         description: prompt.value,
       });
       savedWorkflowId.value = result.id;
+      toastStore.info("Blueprint saved to library.");
     }
   } catch (error) {
     console.error("Save failed:", error);
+    toastStore.error("Failed to save blueprint.");
   } finally {
     isSaving.value = false;
   }
@@ -117,13 +123,7 @@ async function deployToSelectedServer() {
     .find((s) => s.id === selectedServerId.value);
 
   if (!selectedServer?.n8nApiKey) {
-    if (
-      confirm(
-        "This server doesn't have an n8n API Key configured. You need to add it in the Dashboard first. Go there now?",
-      )
-    ) {
-      window.location.href = "/dashboard";
-    }
+    toastStore.error("Target server missing n8n API Key. Configure it in Dashboard.");
     return;
   }
 
@@ -144,12 +144,13 @@ async function deployToSelectedServer() {
     if (result.pushedToRealN8n) {
       deploySuccess.value = true;
       showDeployMenu.value = false;
+      toastStore.info("Successfully pushed to n8n instance.");
     } else {
-      alert("Workflow saved locally but couldn't be pushed to n8n instance.");
+      toastStore.warn("Workflow saved locally but couldn't be pushed to n8n.");
     }
   } catch (error: any) {
     console.error("Deployment failed:", error);
-    alert(error.message || "Failed to deploy workflow to n8n.");
+    toastStore.error(error.message || "Failed to deploy workflow to n8n.");
   } finally {
     isDeploying.value = false;
   }

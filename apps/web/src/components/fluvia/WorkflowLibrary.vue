@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { orpc } from "@/lib/orpc";
+import { toastStore } from "@/lib/toast-store";
 import {
   FileCode,
   Trash2,
@@ -19,6 +20,7 @@ async function fetchWorkflows() {
     workflows.value = await orpc.fluvia.customWorkflow.list();
   } catch (e) {
     console.error("Failed to fetch:", e);
+    toastStore.error("Failed to load workflows.");
   } finally {
     loading.value = false;
   }
@@ -29,9 +31,11 @@ async function deleteWorkflow(id: string) {
     return;
   try {
     await orpc.fluvia.customWorkflow.delete({ id });
+    toastStore.warn("Blueprint removed from library.");
     await fetchWorkflows();
   } catch (e) {
     console.error("Delete failed:", e);
+    toastStore.error("Failed to delete blueprint.");
   }
 }
 

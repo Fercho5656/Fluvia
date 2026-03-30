@@ -26,6 +26,7 @@ onMounted(() => {
           <Toast
             :message="toast.message"
             :status="toast.status"
+            :timeout="toast.timeout"
             @close="toastStore.remove(toast.id)"
           />
         </div>

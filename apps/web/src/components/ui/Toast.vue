@@ -6,6 +6,7 @@ import type { ToastStatus } from "@/lib/toast-store";
 const props = defineProps<{
   message: string;
   status: ToastStatus;
+  timeout?: number;
 }>();
 
 defineEmits(["close"]);
@@ -17,6 +18,7 @@ const statusConfig = {
     text: "text-primary",
     border: "border-primary/20",
     iconColor: "text-primary",
+    progressBg: "bg-primary",
   },
   warn: {
     icon: AlertTriangle,
@@ -24,6 +26,7 @@ const statusConfig = {
     text: "text-tertiary",
     border: "border-tertiary/20",
     iconColor: "text-tertiary",
+    progressBg: "bg-tertiary",
   },
   error: {
     icon: XCircle,
@@ -31,6 +34,7 @@ const statusConfig = {
     text: "text-error",
     border: "border-error/20",
     iconColor: "text-error",
+    progressBg: "bg-error",
   },
 };
 
@@ -41,7 +45,7 @@ const config = statusConfig[props.status];
   <div
     :class="
       cn(
-        'flex items-center gap-4 p-4 rounded-xl backdrop-blur-md border shadow-lg',
+        'relative flex items-center gap-4 p-4 rounded-xl backdrop-blur-md border shadow-lg overflow-hidden',
         config.bg,
         config.border,
         config.text,
@@ -56,5 +60,33 @@ const config = statusConfig[props.status];
     >
       <X class="size-4 opacity-50 hover:opacity-100" />
     </button>
+
+    <!-- Progress Bar -->
+    <div
+      v-if="timeout && timeout > 0"
+      class="absolute bottom-0 left-0 h-0.5 w-full overflow-hidden"
+    >
+      <div
+        :class="cn('h-full w-full origin-left shrink-animation', config.progressBg)"
+        :style="{ animationDuration: `${timeout}ms` }"
+      ></div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.shrink-animation {
+  animation-name: shrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+</style>
