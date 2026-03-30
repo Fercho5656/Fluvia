@@ -23,8 +23,13 @@ import {
   EyeOff,
   ShieldAlert,
   ExternalLink,
+  Search,
+  Key,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
+import StatCard from "@/components/ui/StatCard.vue";
+import Modal from "@/components/ui/Modal.vue";
+import Button from "@/components/ui/Button.vue";
 
 const props = defineProps<{
   initialWorkspaces?: any[];
@@ -34,29 +39,35 @@ const workspaces = ref<any[]>(props.initialWorkspaces || []);
 const loading = ref(!props.initialWorkspaces);
 const creating = ref(false);
 const newWorkspaceName = ref("");
-const activeMenuId = ref<string | null>(null);
+const searchQuery = ref("");
 
 // Workspace Edit state
 const editingWorkspaceId = ref<string | null>(null);
 const editNameValue = ref("");
 
-// Password Security State
+// Modals State
+const showAddClientModal = ref(false);
 const showProvisionModal = ref(false);
+const showActionModal = ref(false);
+const showSettingsModal = ref(false);
+
+// Data for modals
 const generatedPassword = ref("");
 const passwordVisible = ref(false);
 const passwordConfirmed = ref(false);
-
 const provisioningWorkspaceId = ref<string | null>(null);
 
-const showActionModal = ref(false);
 const actionPassword = ref("");
 const currentAction = ref<{ type: string; id: string; label: string } | null>(null);
 const actionLoading = ref(false);
 const actionError = ref("");
 
+const settingsServerId = ref<string | null>(null);
+const n8nApiKey = ref("");
+const savingSettings = ref(false);
+
 // Polling state
 const pollInterval = ref<any>(null);
-
 const expectingStaticTransition = ref(false);
 
 function startPolling() {
@@ -73,7 +84,7 @@ function startPolling() {
     } else {
       stopPolling();
     }
-  }, 5000); // 5s poll
+  }, 5000);
 }
 
 function stopPolling() {
@@ -87,7 +98,6 @@ async function fetchWorkspaces() {
   try {
     const data = await orpc.fluvia.workspace.list();
     workspaces.value = data;
-    // Check if we need to start polling after a refresh
     const hasTransitional = data.some((ws: any) =>
       ws.servers?.some((s: any) =>
         ["deploying", "deleting", "stopping", "resuming", "restarting"].includes(s.status),
@@ -105,7 +115,6 @@ onMounted(() => {
   if (!props.initialWorkspaces || props.initialWorkspaces.length === 0) {
     fetchWorkspaces();
   } else {
-    // Check initial data for polling need
     const hasTransitional = props.initialWorkspaces.some((ws: any) =>
       ws.servers?.some((s: any) =>
         ["deploying", "deleting", "stopping", "resuming", "restarting"].includes(s.status),
@@ -115,7 +124,6 @@ onMounted(() => {
   }
 });
 
-// Lifecycle cleanup
 onUnmounted(() => stopPolling());
 
 async function createWorkspace() {
@@ -124,6 +132,7 @@ async function createWorkspace() {
   try {
     await orpc.fluvia.workspace.create({ name: newWorkspaceName.value });
     newWorkspaceName.value = "";
+    showAddClientModal.value = false;
     await fetchWorkspaces();
   } catch (error) {
     console.error("Failed to create workspace:", error);
@@ -142,23 +151,16 @@ async function provisionServer(workspaceName: string, workspaceId: string) {
     await fetchWorkspaces();
   } catch (error: any) {
     console.error("Failed to provision server:", error);
-    alert(error.message || "Failed to provision server. CubePath may be out of IPv4 resources.");
+    alert(error.message || "Failed to provision server.");
   } finally {
     provisioningWorkspaceId.value = null;
   }
 }
 
-// n8n Settings State
-const showSettingsModal = ref(false);
-const settingsServerId = ref<string | null>(null);
-const n8nApiKey = ref("");
-const savingSettings = ref(false);
-
 function openSettingsModal(srv: any) {
   settingsServerId.value = srv.id;
   n8nApiKey.value = srv.n8nApiKey || "";
   showSettingsModal.value = true;
-  activeMenuId.value = null;
 }
 
 async function saveServerSettings() {
@@ -178,17 +180,11 @@ async function saveServerSettings() {
   }
 }
 
-function copyPassword() {
-  navigator.clipboard.writeText(generatedPassword.value);
-}
-
-// Action Verification
 function openActionModal(type: string, id: string, label: string) {
   currentAction.value = { type, id, label };
   actionPassword.value = "";
   actionError.value = "";
   showActionModal.value = true;
-  activeMenuId.value = null;
 }
 
 async function executeAction() {
@@ -206,11 +202,9 @@ async function executeAction() {
     else if (type === "delete") await orpc.fluvia.server.delete(payload);
     else if (type === "reinstall") await orpc.fluvia.server.reinstall(payload);
 
-    // If it's a power action, expect a state change and start polling
     if (["stop", "resume", "restart"].includes(type)) {
       expectingStaticTransition.value = true;
       startPolling();
-      // Stop expecting after 30 seconds
       setTimeout(() => {
         expectingStaticTransition.value = false;
       }, 30000);
@@ -226,7 +220,6 @@ async function executeAction() {
   }
 }
 
-// Workspace Actions
 function startEditing(ws: any) {
   editingWorkspaceId.value = ws.id;
   editNameValue.value = ws.name;
@@ -274,314 +267,368 @@ const provisioningServersCount = computed(
     workspaces.value.filter((w) => w.servers?.some((s: any) => s.status === "provisioning")).length,
 );
 
-const stats = computed(() => [
-  { label: "Active Servers", value: activeServersCount.value, icon: Server },
-  { label: "Total Workflows", value: totalWorkflowsCount.value, icon: Activity },
-  { label: "In Provisioning", value: provisioningServersCount.value, icon: Loader2 },
-]);
+const filteredWorkspaces = computed(() => {
+  if (!searchQuery.value) return workspaces.value;
+  const query = searchQuery.value.toLowerCase();
+  return workspaces.value.filter(
+    (ws) =>
+      ws.name.toLowerCase().includes(query) ||
+      ws.id.toLowerCase().includes(query) ||
+      ws.servers?.some((s: any) => s.url.toLowerCase().includes(query)),
+  );
+});
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+}
+
+// Custom directive for auto-focus
+const vFocus = {
+  mounted: (el: HTMLInputElement) => el.focus(),
+};
 </script>
 
 <template>
-  <div class="space-y-8 relative">
+  <div class="space-y-12 pb-20">
     <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <h1 class="text-4xl font-bold tracking-tight text-white">Agency Command</h1>
-        <p class="text-muted-foreground mt-1">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div class="space-y-1">
+        <h1 class="text-4xl font-extrabold tracking-tighter text-on-surface font-headline">
+          Agency Command
+        </h1>
+        <p class="text-on-surface/40 font-medium">
           Manage infrastructure and automation for your clients.
         </p>
       </div>
 
-      <div class="flex items-center gap-3">
-        <div class="relative group">
+      <Button @click="showAddClientModal = true" size="md">
+        <Plus class="size-4 mr-2" />
+        Add Client
+      </Button>
+    </div>
+
+    <!-- Summary Stats Grid -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <StatCard
+        label="Active Servers"
+        :value="activeServersCount"
+        :icon="Server"
+        subtext="All systems stable"
+        trend="stable"
+      />
+      <StatCard
+        label="Total Workflows"
+        :value="totalWorkflowsCount"
+        :icon="Activity"
+        subtext="+0 since yesterday"
+      />
+      <StatCard
+        label="In Provisioning"
+        :value="provisioningServersCount"
+        :icon="RefreshCcw"
+        :subtext="provisioningServersCount > 0 ? 'Deploying now' : 'Queue Empty'"
+      />
+    </section>
+
+    <!-- Main Listing Area -->
+    <section class="space-y-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 gap-4">
+        <div class="flex items-center gap-4">
+          <h3 class="text-xl font-bold font-headline">Client Environments</h3>
+          <span
+            class="px-2 py-0.5 bg-surface-container-highest text-[10px] font-bold rounded text-on-surface/60"
+          >
+            {{ filteredWorkspaces.length }} Total
+          </span>
+        </div>
+        <div class="relative w-full sm:w-auto">
+          <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-on-surface/30" />
           <input
-            v-model="newWorkspaceName"
+            v-model="searchQuery"
+            class="bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-2.5 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-80 text-on-surface placeholder-on-surface/30 outline-none"
+            placeholder="Search clients or instances..."
             type="text"
-            placeholder="New Client Name..."
-            class="bg-surface-elevated border border-border rounded-lg px-4 py-2.5 text-sm w-64 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
-            @keyup.enter="createWorkspace"
           />
         </div>
-        <button
-          @click="createWorkspace"
-          :disabled="creating || !newWorkspaceName"
-          class="bg-primary hover:bg-primary/90 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 class="size-8 animate-spin text-primary" />
+        <p class="text-on-surface/40 font-bold uppercase tracking-widest text-[10px]">
+          Syncing infrastructure...
+        </p>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-else-if="workspaces.length === 0"
+        class="text-center py-20 bg-surface-container-low rounded-2xl border border-dashed border-outline-variant"
+      >
+        <div
+          class="bg-primary/10 size-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/20"
         >
-          <Loader2 v-if="creating" class="size-4 animate-spin" />
-          <Plus v-else class="size-4" />
-          Add Client
-        </button>
-      </div>
-    </div>
-
-    <!-- Stats Overview -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div
-        v-for="stat in stats"
-        :key="stat.label"
-        class="bg-surface-elevated border border-border p-6 rounded-xl space-y-2"
-      >
-        <div class="flex items-center justify-between">
-          <span class="text-muted-foreground text-sm font-medium">{{ stat.label }}</span>
-          <component :is="stat.icon" class="size-5 text-primary/60" />
+          <Database class="size-8 text-primary" />
         </div>
-        <div class="text-3xl font-bold text-white">{{ stat.value }}</div>
+        <h3 class="text-xl font-bold text-on-surface font-headline">No Client Workspaces</h3>
+        <p class="text-on-surface/40 mt-2 max-w-xs mx-auto text-sm">
+          Create your first client workspace to start deploying automation servers.
+        </p>
       </div>
-    </div>
 
-    <!-- Workspaces List -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
-      <Loader2 class="size-8 animate-spin text-primary" />
-      <p class="text-muted-foreground animate-pulse">Syncing infrastructure...</p>
-    </div>
-
-    <div
-      v-else-if="workspaces.length === 0"
-      class="text-center py-20 glass-panel rounded-2xl border-dashed"
-    >
-      <div class="bg-primary/10 size-16 rounded-full flex items-center justify-center mx-auto mb-4">
-        <Database class="size-8 text-primary" />
-      </div>
-      <h3 class="text-xl font-semibold text-white">No Client Workspaces</h3>
-      <p class="text-muted-foreground mt-2 max-w-xs mx-auto">
-        Create your first client workspace to start deploying automation servers.
-      </p>
-    </div>
-
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div
-        v-for="ws in workspaces"
-        :key="ws.id"
-        class="group bg-surface-elevated border border-border hover:border-primary/30 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5"
-      >
-        <div class="p-6 space-y-6">
-          <div class="flex items-start justify-between">
-            <div class="space-y-1 flex-1 min-w-0">
-              <div v-if="editingWorkspaceId === ws.id" class="flex items-center gap-2 mr-4">
-                <input
-                  v-model="editNameValue"
-                  class="bg-black/20 border border-primary/50 rounded px-2 py-1 text-lg font-bold text-white w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                  @keyup.enter="saveWorkspaceName"
-                  @keyup.esc="editingWorkspaceId = null"
-                  auto-focus
-                />
-                <button
-                  @click="saveWorkspaceName"
-                  class="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded"
-                >
-                  <Check class="size-4" />
-                </button>
-                <button
-                  @click="editingWorkspaceId = null"
-                  class="p-1 text-rose-400 hover:bg-rose-400/10 rounded"
-                >
-                  <X class="size-4" />
-                </button>
+      <!-- Client Grid -->
+      <div v-else class="grid grid-cols-1 gap-6">
+        <div
+          v-for="ws in filteredWorkspaces"
+          :key="ws.id"
+          class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden group hover:border-primary/40 transition-all"
+        >
+          <!-- Card Header -->
+          <div
+            class="p-6 border-b border-outline-variant flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center border border-outline"
+              >
+                <Database class="size-6 text-on-surface/40" />
               </div>
-              <h3
-                v-else
-                class="text-xl font-bold text-white group-hover:text-primary transition-colors truncate"
-              >
-                {{ ws.name }}
-              </h3>
-
-              <p class="text-xs font-mono text-muted-foreground tracking-widest uppercase">
-                ID: {{ ws.id.slice(0, 8) }}
-              </p>
+              <div>
+                <div class="flex items-center gap-2 min-h-8">
+                  <div v-if="editingWorkspaceId === ws.id" class="flex items-center gap-2 flex-1">
+                    <input
+                      v-model="editNameValue"
+                      class="bg-black/40 border border-primary/50 rounded px-2 py-0 text-lg font-bold text-white w-full h-8 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      @keyup.enter="saveWorkspaceName"
+                      @keyup.esc="editingWorkspaceId = null"
+                      v-focus
+                    />
+                    <div class="flex gap-1 shrink-0">
+                      <button
+                        @click="saveWorkspaceName"
+                        class="text-emerald-400 hover:text-emerald-300 transition-colors p-1"
+                      >
+                        <Check class="size-4" />
+                      </button>
+                      <button
+                        @click="editingWorkspaceId = null"
+                        class="text-on-surface/20 hover:text-on-surface transition-colors p-1"
+                      >
+                        <X class="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <template v-else>
+                    <h4 class="text-lg font-bold font-headline text-on-surface leading-8">
+                      {{ ws.name }}
+                    </h4>
+                    <button
+                      @click="startEditing(ws)"
+                      class="p-1 hover:bg-surface-container-highest rounded text-on-surface/30 hover:text-primary transition-colors"
+                    >
+                      <Pencil class="size-4" />
+                    </button>
+                  </template>
+                </div>
+                <p class="text-[10px] text-on-surface/40 uppercase tracking-widest font-bold">
+                  ID: {{ ws.id.slice(0, 8) }} • {{ ws.servers?.[0]?.status || "Idle" }}
+                </p>
+              </div>
             </div>
-            <div class="flex gap-1">
-              <button
-                @click="startEditing(ws)"
-                class="p-2 hover:bg-white/5 rounded-lg text-muted-foreground transition-colors"
-                title="Edit Name"
-              >
-                <Pencil class="size-4" />
-              </button>
+
+            <div class="flex items-center gap-4 w-full sm:w-auto">
+              <template v-if="ws.servers?.[0]">
+                <span
+                  :class="
+                    cn(
+                      'px-3 py-1 text-[10px] font-bold rounded-full border uppercase',
+                      ws.servers[0].status === 'active'
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                        : 'bg-orange-500/10 text-orange-500 border-orange-500/20 animate-pulse',
+                    )
+                  "
+                >
+                  {{ ws.servers[0].status }}
+                </span>
+                <div
+                  class="flex items-center gap-1 ml-auto sm:ml-4 border-l border-outline-variant pl-4"
+                >
+                  <span class="text-[10px] font-bold text-on-surface/40 uppercase">CPU</span>
+                  <div class="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                    <div
+                      class="bg-primary h-full"
+                      :style="{ width: ws.servers[0].status === 'active' ? '12%' : '0%' }"
+                    ></div>
+                  </div>
+                </div>
+              </template>
               <button
                 @click="deleteWorkspace(ws.id)"
-                class="p-2 hover:bg-rose-500/10 rounded-lg text-muted-foreground hover:text-rose-500 transition-colors"
-                title="Delete Client"
+                class="p-2 hover:bg-rose-500/10 rounded-lg text-on-surface/20 hover:text-rose-500 transition-colors ml-auto sm:ml-0"
               >
                 <Trash2 class="size-4" />
               </button>
             </div>
           </div>
 
-          <!-- Servers -->
-          <div v-if="ws.servers && ws.servers.length > 0" class="space-y-4">
-            <div
-              v-for="srv in ws.servers"
-              :key="srv.id"
-              class="bg-black/20 rounded-lg p-4 border border-white/5 space-y-3 relative"
-            >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <div
-                    :class="
-                      cn(
-                        'size-2 rounded-full',
-                        srv.status === 'active'
-                          ? 'bg-accent animate-pulse'
-                          : srv.status === 'stopped'
-                            ? 'bg-zinc-600'
-                            : ['deploying', 'resuming', 'restarting'].includes(srv.status)
-                              ? 'bg-orange-400 animate-pulse'
-                              : ['deleting', 'stopping'].includes(srv.status)
-                                ? 'bg-rose-500 animate-pulse'
-                                : 'bg-rose-500', // error fallback
-                      )
-                    "
-                  ></div>
-                  <span class="text-sm font-medium text-white capitalize">{{ srv.status }}</span>
+          <!-- Card Content -->
+          <div class="p-6 flex flex-col md:flex-row gap-8">
+            <div class="flex-1 space-y-4">
+              <template v-if="ws.servers?.[0]">
+                <div>
+                  <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
+                    >Endpoint URL</label
+                  >
+                  <div class="flex items-center gap-2 mt-1">
+                    <code
+                      class="text-xs text-primary font-mono bg-primary/5 px-3 py-1.5 rounded border border-primary/10"
+                      >{{ ws.servers[0].url }}</code
+                    >
+                    <a
+                      :href="ws.servers[0].url"
+                      target="_blank"
+                      class="text-on-surface/40 hover:text-on-surface"
+                      ><ExternalLink class="size-4"
+                    /></a>
+                  </div>
                 </div>
-
-                <!-- Infrastructure Menu -->
-                <div class="relative">
-                  <button
-                    @click="activeMenuId = activeMenuId === srv.id ? null : srv.id"
-                    class="p-1 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <MoreVertical class="size-4 text-muted-foreground" />
-                  </button>
-
-                  <div
-                    v-if="activeMenuId === srv.id"
-                    class="absolute right-0 top-full mt-2 w-48 glass-panel rounded-xl shadow-2xl z-50 p-1 overflow-hidden"
-                  >
-                    <button
-                      v-if="srv.status === 'active'"
-                      @click="openActionModal('stop', srv.id, 'Stop Server')"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                <div class="flex gap-8">
+                  <div>
+                    <label
+                      class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
+                      >Version</label
                     >
-                      <Square class="size-3" /> Stop Server
-                    </button>
-                    <button
-                      v-if="srv.status === 'stopped'"
-                      @click="openActionModal('resume', srv.id, 'Resume Server')"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                    <p class="text-xs mt-0.5 font-medium">1.24.1 (Stable)</p>
+                  </div>
+                  <div>
+                    <label
+                      class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
+                      >API Status</label
                     >
-                      <Play class="size-3" /> Resume Server
-                    </button>
                     <button
-                      @click="openActionModal('restart', srv.id, 'Restart')"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
+                      @click="openSettingsModal(ws.servers[0])"
+                      class="flex items-center gap-1.5 text-xs mt-0.5 text-primary hover:underline font-bold"
                     >
-                      <RotateCw class="size-3" /> Restart
-                    </button>
-                    <button
-                      @click="openSettingsModal(srv)"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-white/80"
-                    >
-                      <Settings class="size-3" /> n8n API Key
-                    </button>
-                    <div class="h-px bg-white/5 my-1"></div>
-                    <button
-                      @click="openActionModal('reinstall', srv.id, 'Reinstall')"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-orange-400/80"
-                    >
-                      <RefreshCcw class="size-3" /> Reinstall
-                    </button>
-                    <button
-                      @click="openActionModal('delete', srv.id, 'Delete Server')"
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center gap-2 text-rose-500/80"
-                    >
-                      <Trash2 class="size-3" /> Delete Server
+                      <Key class="size-3" />
+                      {{ ws.servers[0].n8nApiKey ? "Configured" : "Missing Key" }}
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div class="flex items-center justify-between gap-4 pt-2">
-                <div class="flex flex-col gap-0.5 min-w-0">
-                  <span
-                    class="text-[10px] text-muted-foreground uppercase tracking-tighter font-bold"
-                    >Endpoint</span
-                  >
-                  <a
-                    :href="srv.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-xs truncate text-accent font-mono hover:underline hover:text-accent/80 transition-all flex items-center gap-1"
-                  >
-                    {{ srv.url }}
-                    <ExternalLink class="size-3 inline" />
-                  </a>
-                </div>
-
-                <span class="text-[10px] font-mono text-muted-foreground uppercase"
-                  >CubePath: {{ srv.id.slice(0, 8) }}</span
+              </template>
+              <div
+                v-else-if="provisioningWorkspaceId === ws.id"
+                class="flex items-center gap-3 py-4 text-primary"
+              >
+                <Loader2 class="size-5 animate-spin" />
+                <span class="text-xs font-bold uppercase tracking-widest"
+                  >Initialising CubePath Provisioning...</span
                 >
               </div>
+              <div v-else class="py-4">
+                <Button @click="provisionServer(ws.name, ws.id)" variant="outline" size="md">
+                  <Server class="size-4 mr-2" />
+                  Provision CubePath Instance
+                </Button>
+              </div>
             </div>
-          </div>
 
-          <div
-            v-else
-            class="bg-black/20 rounded-lg p-8 border border-dashed border-white/10 flex flex-col items-center justify-center text-center"
-          >
-            <template v-if="provisioningWorkspaceId === ws.id">
-              <Loader2 class="size-8 animate-spin text-primary mb-4" />
-              <p class="text-sm text-muted-foreground">Provisioning your server...</p>
-              <p
-                class="text-[10px] text-muted-foreground/60 mt-1 uppercase tracking-widest font-bold"
-              >
-                Retrying if IP reservation fails
-              </p>
-            </template>
-            <template v-else>
-              <p class="text-sm text-muted-foreground mb-4">No automation server provisioned.</p>
-              <button
-                @click="provisionServer(ws.name, ws.id)"
-                class="text-xs font-bold text-primary hover:text-primary/80 flex items-center gap-2 uppercase tracking-widest"
-              >
-                <Server class="size-3" />
-                Provision CubePath Server
-              </button>
-            </template>
-          </div>
-        </div>
-
-        <!-- Footer / Action bar -->
-        <div class="bg-black/10 px-6 py-3 border-t border-border flex items-center justify-between">
-          <span class="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
-            {{ ws.servers?.[0]?.workflows?.length || 0 }} Snapshots Deployed
-          </span>
-          <div class="flex items-center gap-4">
-            <a
-              :href="`/dashboard/designer`"
-              class="text-xs font-medium text-white/50 hover:text-white transition-colors flex items-center gap-1"
+            <!-- Server Actions Grid -->
+            <div
+              v-if="ws.servers?.[0]"
+              class="grid grid-cols-2 gap-2 border-t md:border-t-0 md:border-l border-outline-variant pt-6 md:pt-0 md:pl-8 w-full md:w-70 shrink-0"
             >
-              AI Designer
-              <ChevronRight class="size-3" />
-            </a>
+              <button
+                v-if="ws.servers[0].status === 'stopped'"
+                @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+              >
+                <Play class="size-3.5 text-emerald-500" />
+                <span class="truncate">Resume</span>
+              </button>
+              <button
+                v-if="ws.servers[0].status === 'active'"
+                @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+              >
+                <Square class="size-3.5 text-on-surface/40" />
+                <span class="truncate">Stop</span>
+              </button>
+              <button
+                @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+              >
+                <RotateCw class="size-3.5 text-amber-500" />
+                <span class="truncate">Restart</span>
+              </button>
+              <button
+                @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+              >
+                <RefreshCcw class="size-3.5 text-blue-500" />
+                <span class="truncate">Reinstall</span>
+              </button>
+              <button
+                @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-error/10 hover:border-error/40 border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all text-on-surface/60 hover:text-error"
+              >
+                <Trash2 class="size-3.5" />
+                <span class="truncate">Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- MODALS -->
+    <!-- Modals Implementation -->
+
+    <!-- Add Client Modal -->
+    <Modal
+      :show="showAddClientModal"
+      title="Provision New Client"
+      @close="showAddClientModal = false"
+    >
+      <form class="space-y-6" @submit.prevent="createWorkspace">
+        <div class="col-span-2">
+          <label
+            class="block text-[10px] font-bold text-on-surface/40 uppercase tracking-widest mb-2"
+            >Client Company Name</label
+          >
+          <input
+            v-model="newWorkspaceName"
+            class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
+            placeholder="e.g. Acme Corp"
+            type="text"
+            required
+          />
+        </div>
+        <div class="pt-4">
+          <Button type="submit" :disabled="creating || !newWorkspaceName" class="w-full" size="lg">
+            <Loader2 v-if="creating" class="size-4 animate-spin mr-2" />
+            Initialize Workspace
+          </Button>
+        </div>
+      </form>
+    </Modal>
 
     <!-- One-Time Password Display Modal -->
-    <div
-      v-if="showProvisionModal"
-      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    <Modal
+      :show="showProvisionModal"
+      title="VPS Security Credentials"
+      @close="showProvisionModal = false"
     >
-      <div
-        class="glass-panel w-full max-w-md p-8 rounded-2xl border-primary/20 space-y-6 shadow-2xl"
-      >
+      <div class="space-y-6">
         <div class="flex flex-col items-center text-center space-y-2">
           <div class="bg-primary/20 p-3 rounded-full mb-2">
             <ShieldAlert class="size-8 text-primary" />
           </div>
-          <h2 class="text-2xl font-bold text-white">VPS Security Credentials</h2>
-          <p class="text-muted-foreground text-sm">
-            Your server is being provisioned. This is the **ONLY TIME** you will see your root
-            password. Please store it securely (e.g., in a password manager).
+          <p class="text-on-surface/60 text-sm">
+            This is the **ONLY TIME** you will see your root password. Please store it securely.
           </p>
         </div>
 
         <div class="bg-black/40 border border-white/10 rounded-xl p-4 space-y-2">
-          <label class="text-[10px] uppercase tracking-widest text-muted-foreground font-bold"
+          <label class="text-[10px] uppercase tracking-widest text-on-surface/40 font-bold"
             >Root Password</label
           >
           <div class="flex items-center gap-2">
@@ -589,7 +636,7 @@ const stats = computed(() => [
               :type="passwordVisible ? 'text' : 'password'"
               :value="generatedPassword"
               readonly
-              class="flex-1 bg-transparent border-none text-xl font-mono text-accent focus:ring-0"
+              class="flex-1 bg-transparent border-none text-xl font-mono text-primary focus:ring-0"
             />
             <button
               @click="passwordVisible = !passwordVisible"
@@ -598,7 +645,7 @@ const stats = computed(() => [
               <component :is="passwordVisible ? EyeOff : Eye" class="size-4" />
             </button>
             <button
-              @click="copyPassword"
+              @click="copyToClipboard(generatedPassword)"
               class="p-2 hover:bg-white/5 rounded-lg transition-colors text-primary"
             >
               <Copy class="size-4" />
@@ -614,39 +661,33 @@ const stats = computed(() => [
               v-model="passwordConfirmed"
               class="size-4 rounded border-white/10 bg-black/40 text-primary focus:ring-primary"
             />
-            <label for="confirm-pwd" class="text-xs text-muted-foreground">
+            <label for="confirm-pwd" class="text-xs text-on-surface/60">
               I have safely stored this password and understand it won't be shown again.
             </label>
           </div>
-
-          <button
+          <Button
             @click="showProvisionModal = false"
             :disabled="!passwordConfirmed"
-            class="w-full bg-primary hover:bg-primary/90 disabled:opacity-30 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-primary/20"
+            class="w-full"
+            size="lg"
           >
-            I'm Ready to Continue
-          </button>
+            Continue to Dashboard
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
 
     <!-- Action Verification Modal -->
-    <div
-      v-if="showActionModal"
-      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    <Modal
+      :show="showActionModal"
+      :title="currentAction?.label || 'Verify Action'"
+      maxWidth="max-w-sm"
+      @close="showActionModal = false"
     >
-      <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border-white/10 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-bold text-white">{{ currentAction?.label }}</h3>
-          <button @click="showActionModal = false" class="p-1 hover:bg-white/5 rounded-lg">
-            <X class="size-5 text-muted-foreground" />
-          </button>
-        </div>
-
-        <p class="text-xs text-muted-foreground">
+      <div class="space-y-4">
+        <p class="text-xs text-on-surface/60">
           Please enter your VPS root password to authorize this action.
         </p>
-
         <div class="space-y-3">
           <input
             v-model="actionPassword"
@@ -655,82 +696,78 @@ const stats = computed(() => [
             class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
             @keyup.enter="executeAction"
           />
-          <p v-if="actionError" class="text-[10px] text-rose-500 font-bold uppercase tracking-wide">
+          <p v-if="actionError" class="text-[10px] text-error font-bold uppercase tracking-wide">
             {{ actionError }}
           </p>
         </div>
-
         <div class="flex gap-2">
           <button
             @click="showActionModal = false"
-            class="flex-1 bg-white/5 hover:bg-white/10 text-white text-sm py-2.5 rounded-lg transition-colors"
+            class="flex-1 bg-white/5 hover:bg-white/10 text-on-surface text-sm py-2.5 rounded-lg transition-colors"
           >
             Cancel
           </button>
-          <button
+          <Button
             @click="executeAction"
             :disabled="actionLoading || !actionPassword"
-            class="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+            class="flex-1"
           >
-            <Loader2 v-if="actionLoading" class="size-4 animate-spin" />
+            <Loader2 v-if="actionLoading" class="size-4 animate-spin mr-2" />
             Confirm
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
 
     <!-- n8n Settings Modal -->
-    <div
-      v-if="showSettingsModal"
-      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    <Modal
+      :show="showSettingsModal"
+      title="n8n API Credentials"
+      maxWidth="max-w-md"
+      @close="showSettingsModal = false"
     >
-      <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border-white/10 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
-            <Settings class="size-5 text-primary" />
-            n8n Configuration
-          </h3>
-          <button @click="showSettingsModal = false" class="p-1 hover:bg-white/5 rounded-lg">
-            <X class="size-5 text-muted-foreground" />
-          </button>
+      <div class="space-y-6">
+        <div class="text-center">
+          <div
+            class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/20"
+          >
+            <Key class="size-8 text-primary" />
+          </div>
+          <p class="text-xs text-on-surface/40">
+            Enter your n8n Public API Key to enable AI deployments.
+          </p>
         </div>
-
-        <p class="text-xs text-muted-foreground leading-relaxed">
-          Enter your n8n **Public API Key**. You can generate this in your n8n instance under
-          **Settings > Public API**.
-        </p>
-
-        <div class="space-y-3">
-          <div class="space-y-1">
-            <label class="text-[10px] uppercase tracking-widest text-muted-foreground font-bold"
-              >API Key</label
-            >
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-widest"
+            >API Key</label
+          >
+          <div class="relative group">
             <input
               v-model="n8nApiKey"
+              class="w-full bg-black/40 border border-outline-variant rounded-lg px-4 py-3 font-mono text-sm tracking-widest outline-none"
               type="password"
-              placeholder="n8n_api_..."
-              class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+              placeholder="fluvia_n8n_..."
             />
           </div>
         </div>
-
-        <div class="flex gap-2 pt-2">
+        <div class="flex gap-3 pt-2">
           <button
             @click="showSettingsModal = false"
-            class="flex-1 bg-white/5 hover:bg-white/10 text-white text-sm py-2.5 rounded-lg transition-colors"
+            class="flex-1 bg-surface-container-highest hover:bg-surface-container-highest/80 text-xs font-bold py-3 rounded-lg border border-outline-variant transition-all"
           >
             Cancel
           </button>
-          <button
+          <Button
             @click="saveServerSettings"
             :disabled="savingSettings || !n8nApiKey"
-            class="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-sm font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2"
+            class="flex-1"
+            variant="primary"
           >
-            <Loader2 v-if="savingSettings" class="size-4 animate-spin" />
+            <Loader2 v-if="savingSettings" class="size-4 animate-spin mr-2" />
             Save Key
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   </div>
 </template>

@@ -1,6 +1,7 @@
 ---
 import "@/styles/global.css";
 import Header from "@/components/Header.astro";
+import ToastContainer from "@/components/ui/ToastContainer.vue";
 
 interface Props {
   title?: string;
@@ -39,5 +40,6 @@ const user = Astro.locals.user;
   <body class="min-h-screen bg-background text-on-surface selection:bg-primary/30 selection:text-on-primary">
     <Header user={user} />
     <slot />
+    <ToastContainer client:load />
   </body>
 </html>
