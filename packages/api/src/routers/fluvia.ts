@@ -174,7 +174,7 @@ export const fluviaRouter = {
             vps = await CubePathService.createVps({
               label: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
               name: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
-              plan_name: "gp.nano",
+              plan_name: "gp.micro",
               template_name: "n8n",
               location_name: "us-hou-1",
               password: password,
