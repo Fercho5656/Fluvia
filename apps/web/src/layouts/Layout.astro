@@ -37,7 +37,7 @@ const user = Astro.locals.user;
       }
     </style>
   </head>
-  <body class="min-h-screen bg-background text-on-surface selection:bg-primary/30 selection:text-on-primary">
+  <body class="min-h-screen bg-background text-on-surface selection:bg-primary/30 selection:text-on-primary flex flex-col">
     <Header user={user} />
     <slot />
     <ToastContainer client:load />

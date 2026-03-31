@@ -13,7 +13,9 @@ const serverId = Astro.url.searchParams.get("serverId");
 ---
 
 <Layout title="AI Designer - Fluvia">
-  <main class="mx-auto max-w-7xl px-4 py-12 md:px-8">
-    <WorkflowDesigner initialWorkflowId={workflowId || undefined} client:load />
+  <main class="mx-auto max-w-7xl px-4 py-6 md:px-8 flex-1 flex flex-col min-h-0">
+    <div class="flex-1 flex flex-col min-h-0">
+      <WorkflowDesigner initialWorkflowId={workflowId || undefined} client:load />
+    </div>
   </main>
 </Layout>

@@ -197,7 +197,7 @@ onMounted(fetchInitialData);
 </script>
 
 <template>
-  <div class="h-[calc(100vh-12rem)] flex flex-col gap-6">
+  <div class="flex flex-col gap-6 h-full">
     <!-- Header/Breadcrumbs -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -228,7 +228,7 @@ onMounted(fetchInitialData);
 
     <div class="flex-1 flex gap-6 min-h-0">
       <!-- Left: AI Input Panel (Chat) -->
-      <div class="w-1/3 flex flex-col gap-4">
+      <div class="w-1/3 flex flex-col gap-4 min-h-0">
         <div
           class="flex-1 bg-surface-elevated border border-border rounded-2xl flex flex-col overflow-hidden"
         >
@@ -239,16 +239,16 @@ onMounted(fetchInitialData);
                 <Sparkles class="size-5 text-primary" />
               </div>
               <div>
-                <h2 class="text-xl font-bold text-white tracking-tight">AI Architect</h2>
+                <h2 class="text-xl font-bold text-white tracking-tight">AI Workflow Architect</h2>
                 <p class="text-[10px] uppercase tracking-widest text-on-surface/40 font-bold">
-                  Iterative Workflow Design
+                  Iterative Blueprint Design
                 </p>
               </div>
             </div>
           </div>
 
           <!-- Chat History -->
-          <div class="flex-1 overflow-auto p-6 space-y-6">
+          <div ref="chatContainer" class="flex-1 overflow-auto p-6 space-y-6 min-h-0">
             <div
               v-if="chatHistory.length === 0"
               class="h-full flex flex-col items-center justify-center text-center px-4"

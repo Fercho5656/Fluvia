@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  variant?: "primary" | "secondary" | "tertiary" | "outline";
+  variant?: "primary" | "secondary" | "tertiary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg" | "icon";
   class?: string;
   href?: string;
@@ -18,15 +18,17 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const baseStyles =
-  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap rounded-full";
+  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap rounded-full";
 
 const variants = {
   primary:
-    "bg-primary text-on-primary shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5",
+    "bg-linear-to-br from-primary-container to-inverse-primary text-on-primary-container shadow-lg shadow-primary-container/20 hover:shadow-primary-container/40 hover:-translate-y-0.5",
   secondary:
-    "bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-container-highest/80",
-  tertiary: "text-on-surface hover:bg-surface-container-highest",
-  outline: "border border-outline text-on-surface hover:bg-surface-container-highest",
+    "bg-surface-container-highest/40 backdrop-blur-md border border-outline-variant/30 text-on-surface hover:bg-surface-container-highest/60",
+  tertiary: "text-on-surface/60 hover:text-on-surface hover:bg-white/5",
+  ghost: "text-on-surface/40 hover:text-on-surface hover:bg-white/5",
+  outline: "border border-outline-variant/50 text-on-surface hover:bg-white/5",
+  danger: "bg-error/10 border border-error/20 text-error hover:bg-error/20",
 };
 
 const sizes = {

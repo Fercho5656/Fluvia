@@ -2,6 +2,7 @@
 import { Info, AlertTriangle, XCircle, X } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import type { ToastStatus } from "@/lib/toast-store";
+import Button from "@/components/ui/Button.vue";
 
 const props = defineProps<{
   message: string;
@@ -54,12 +55,9 @@ const config = statusConfig[props.status];
   >
     <component :is="config.icon" :class="cn('size-5 shrink-0', config.iconColor)" />
     <p class="text-sm font-medium">{{ message }}</p>
-    <button
-      @click="$emit('close')"
-      class="ml-auto p-1 hover:bg-white/10 rounded-full transition-colors"
-    >
+    <Button @click="$emit('close')" variant="ghost" size="icon" class="h-7 w-7 !p-0 ml-auto">
       <X class="size-4 opacity-50 hover:opacity-100" />
-    </button>
+    </Button>
 
     <!-- Progress Bar -->
     <div
