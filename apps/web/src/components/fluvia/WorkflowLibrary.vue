@@ -53,7 +53,7 @@ onMounted(fetchWorkflows);
         </p>
       </div>
 
-      <Button href="/dashboard/designer" variant="primary" size="md">
+      <Button href="/designer" variant="primary" size="md">
         <Sparkles class="size-4 mr-2" />
         Create New Blueprint
       </Button>
@@ -108,12 +108,7 @@ onMounted(fetchWorkflows);
             <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
               {{ new Date(wf.createdAt).toLocaleDateString() }}
             </span>
-            <Button
-              :href="`/dashboard/designer?id=${wf.id}`"
-              variant="ghost"
-              size="sm"
-              class="!h-8 !px-3"
-            >
+            <Button :href="`/designer?id=${wf.id}`" variant="ghost" size="sm" class="!h-8 !px-3">
               Configure
               <ArrowRight class="size-3 ml-1" />
             </Button>
