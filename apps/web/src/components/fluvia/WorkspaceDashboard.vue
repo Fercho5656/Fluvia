@@ -37,6 +37,7 @@ const props = defineProps<{
 }>();
 
 const workspaces = ref<any[]>(props.initialWorkspaces || []);
+const previousWorkspaces = ref<any[]>([]);
 const loading = ref(!props.initialWorkspaces);
 const creating = ref(false);
 const newWorkspaceName = ref("");
@@ -99,6 +100,26 @@ function stopPolling() {
 async function fetchWorkspaces() {
   try {
     const data = await orpc.fluvia.workspace.list();
+
+    // Check for newly active servers without API Key
+    data.forEach((ws: any) => {
+      ws.servers?.forEach((srv: any) => {
+        const prevWs = previousWorkspaces.value.find((p) => p.id === ws.id);
+        const prevSrv = prevWs?.servers?.find((ps: any) => ps.id === srv.id);
+
+        const justFinishedProvisioning =
+          prevSrv?.status === "provisioning" && srv.status === "active";
+
+        if (justFinishedProvisioning && !srv.n8nApiKey) {
+          toastStore.warn(
+            `"${ws.name}" is now live! Please add your n8n API Key to start deploying.`,
+            10000,
+          );
+        }
+      });
+    });
+
+    previousWorkspaces.value = JSON.parse(JSON.stringify(data));
     workspaces.value = data;
     const hasTransitional = data.some((ws: any) =>
       ws.servers?.some((s: any) =>
@@ -295,6 +316,7 @@ const filteredWorkspaces = computed(() => {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
+  toastStore.info("Copied to clipboard");
 }
 
 // Custom directive for auto-focus
@@ -522,10 +544,19 @@ const vFocus = {
                     >
                     <button
                       @click="openSettingsModal(ws.servers[0])"
-                      class="flex items-center gap-1.5 text-xs mt-0.5 text-primary hover:underline font-bold"
+                      :class="
+                        cn(
+                          'flex items-center gap-1.5 text-xs mt-0.5 font-bold transition-all',
+                          ws.servers[0].n8nApiKey
+                            ? 'text-primary hover:underline'
+                            : 'text-amber-500 hover:text-amber-400 animate-pulse',
+                        )
+                      "
                     >
                       <Key class="size-3" />
-                      {{ ws.servers[0].n8nApiKey ? "Configured" : "Missing Key" }}
+                      {{
+                        ws.servers[0].n8nApiKey ? "Configured" : "Action Required: Missing API Key"
+                      }}
                     </button>
                   </div>
                 </div>
