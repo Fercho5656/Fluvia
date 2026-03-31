@@ -330,12 +330,6 @@ const stats = computed(() => [
     icon: Server,
     color: "text-emerald-400",
   },
-  {
-    label: "System Health",
-    value: "99.9%",
-    icon: Activity,
-    color: "text-blue-400",
-  },
 ]);
 </script>
 
@@ -344,11 +338,9 @@ const stats = computed(() => [
     <!-- Header Section -->
     <header class="flex flex-col md:flex-row md:items-end justify-between gap-6">
       <div class="space-y-1">
-        <h1 class="text-5xl font-extrabold tracking-tighter font-headline text-white">
-          Agency Command
-        </h1>
+        <h1 class="text-5xl font-extrabold tracking-tighter font-headline text-white">Dashboard</h1>
         <p class="text-on-surface/40 font-medium tracking-tight">
-          Enterprise infrastructure oversight & n8n orchestration.
+          Infrastructure oversight & n8n orchestration.
         </p>
       </div>
       <div class="flex items-center gap-3">
