@@ -71,6 +71,7 @@ const savingSettings = ref(false);
 
 // Polling state
 const pollInterval = ref<any>(null);
+const bootingServers = ref<Set<string>>(new Set());
 const expectingStaticTransition = ref(false);
 
 function startPolling() {
@@ -101,11 +102,23 @@ async function fetchWorkspaces() {
   try {
     const data = await orpc.fluvia.workspace.list();
 
-    // Check for newly active servers without API Key
+    // Check for newly active servers without API Key or transitioning to "active"
     data.forEach((ws: any) => {
       ws.servers?.forEach((srv: any) => {
         const prevWs = previousWorkspaces.value.find((p) => p.id === ws.id);
         const prevSrv = prevWs?.servers?.find((ps: any) => ps.id === srv.id);
+
+        // Track "Booting" state (active but recently started)
+        if (
+          srv.status === "active" &&
+          prevSrv &&
+          ["resuming", "restarting", "deploying"].includes(prevSrv.status)
+        ) {
+          bootingServers.value.add(srv.id);
+          setTimeout(() => {
+            bootingServers.value.delete(srv.id);
+          }, 120000); // 2 minutes
+        }
 
         const justFinishedProvisioning =
           prevSrv?.status === "provisioning" && srv.status === "active";
@@ -476,6 +489,13 @@ const vFocus = {
             <div class="flex items-center gap-4 w-full sm:w-auto">
               <template v-if="ws.servers?.[0]">
                 <span
+                  v-if="bootingServers.has(ws.servers[0].id)"
+                  class="px-3 py-1 text-[10px] font-bold rounded-full border uppercase bg-blue-500/10 text-blue-500 border-blue-500/20 animate-pulse"
+                >
+                  Booting
+                </span>
+                <span
+                  v-else
                   :class="
                     cn(
                       'px-3 py-1 text-[10px] font-bold rounded-full border uppercase',
@@ -558,6 +578,12 @@ const vFocus = {
                         ws.servers[0].n8nApiKey ? "Configured" : "Action Required: Missing API Key"
                       }}
                     </button>
+                    <p
+                      v-if="bootingServers.has(ws.servers[0].id)"
+                      class="text-[10px] text-blue-400 font-medium mt-1 animate-pulse"
+                    >
+                      Initializing services... (est. 2m)
+                    </p>
                   </div>
                 </div>
               </template>
