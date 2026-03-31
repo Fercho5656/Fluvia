@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { orpc } from "@/lib/orpc";
 import { toastStore } from "@/lib/toast-store";
 import {
@@ -48,6 +48,16 @@ const workspaces = ref<any[]>([]);
 const selectedServerId = ref("");
 const showDeployMenu = ref(false);
 const deploySuccess = ref(false);
+const deployMenuRef = ref<HTMLElement | null>(null);
+
+const activeWorkspaces = computed(() => {
+  return workspaces.value
+    .map((ws) => ({
+      ...ws,
+      servers: ws.servers?.filter((s: any) => s.status === "active") || [],
+    }))
+    .filter((ws) => ws.servers.length > 0);
+});
 
 const selectedServerUrl = computed(() => {
   if (!selectedServerId.value) return null;
@@ -56,6 +66,12 @@ const selectedServerUrl = computed(() => {
     .find((s) => s.id === selectedServerId.value);
   return srv?.url?.split("//")[1] || null;
 });
+
+function handleClickOutside(event: MouseEvent) {
+  if (deployMenuRef.value && !deployMenuRef.value.contains(event.target as Node)) {
+    showDeployMenu.value = false;
+  }
+}
 
 async function fetchInitialData() {
   if (savedWorkflowId.value) {
@@ -193,7 +209,14 @@ async function deployToSelectedServer() {
   }
 }
 
-onMounted(fetchInitialData);
+onMounted(() => {
+  fetchInitialData();
+  document.addEventListener("mousedown", handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleClickOutside);
+});
 </script>
 
 <template>
@@ -326,7 +349,7 @@ onMounted(fetchInitialData);
             </div>
 
             <!-- Target Server Selection -->
-            <div class="relative">
+            <div class="relative" ref="deployMenuRef">
               <Button
                 @click="showDeployMenu = !showDeployMenu"
                 variant="secondary"
@@ -343,7 +366,7 @@ onMounted(fetchInitialData);
                 v-if="showDeployMenu"
                 class="absolute bottom-full right-0 mb-2 w-64 glass-panel rounded-2xl overflow-hidden shadow-2xl z-50 p-2"
               >
-                <div v-for="ws in workspaces" :key="ws.id" class="mb-2 last:mb-0">
+                <div v-for="ws in activeWorkspaces" :key="ws.id" class="mb-2 last:mb-0">
                   <span class="text-[10px] uppercase font-bold text-on-surface/40 px-2">{{
                     ws.name
                   }}</span>
@@ -378,6 +401,16 @@ onMounted(fetchInitialData);
                       class="size-1.5 rounded-full bg-primary shrink-0 mr-1"
                     ></div>
                   </Button>
+                </div>
+                <div v-if="activeWorkspaces.length === 0" class="p-4 text-center">
+                  <p class="text-[10px] text-muted-foreground mb-2 text-balance">
+                    No active servers found
+                  </p>
+                  <a
+                    href="/dashboard"
+                    class="text-[10px] text-primary font-bold uppercase hover:underline"
+                    >Provision or Start Now</a
+                  >
                 </div>
               </div>
             </div>
