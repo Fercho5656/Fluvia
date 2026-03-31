@@ -1,4 +1,13 @@
-# my-better-t-app
+# Fluvia
+
+This project eases the n8n instances deployment using CubePath serivces, centralizing them in a dashboard, ideal for agencies or freelancers with little or zero tech experience that are looking for solutions to deploy n8n instances with a couple of clicks to start automatizing their customers workflows.
+Users can add clients and launch an n8n instance for their client.
+
+It also offeres an AI chat to build workflows, they can be deployed in any active instance the user has
+
+*Due to recent CubePath restrictions, the whole proyect can only deploy one n8n instance at a time*
+
+# Tech Stack
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Astro, Self, ORPC, and more.
 
