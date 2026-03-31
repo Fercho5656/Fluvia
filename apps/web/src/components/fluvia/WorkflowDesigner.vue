@@ -277,7 +277,7 @@ onMounted(fetchInitialData);
                   cn(
                     'max-w-[90%] px-4 py-3 rounded-2xl text-xs leading-relaxed',
                     msg.role === 'user'
-                      ? 'bg-primary/10 border border-primary/20 text-primary-container font-medium'
+                      ? 'bg-primary/20 border border-primary/30 text-white font-medium'
                       : 'bg-white/5 border border-white/10 text-on-surface/80',
                   )
                 "
