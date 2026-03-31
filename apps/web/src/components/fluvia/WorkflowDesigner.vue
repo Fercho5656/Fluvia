@@ -13,10 +13,15 @@ import {
   Save,
   ChevronDown,
   ShieldCheck,
+  Eye,
+  Code2,
+  LayoutDashboard,
+  FileCode,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import JsonViewer from "@/components/ui/JsonViewer.vue";
 import Button from "@/components/ui/Button.vue";
+import WorkflowVisualizer from "./WorkflowVisualizer.vue";
 
 const props = defineProps<{
   initialWorkflowId?: string;
@@ -29,6 +34,7 @@ const isDeploying = ref(false);
 const generatedJson = ref<any>(null);
 const workflowName = ref("New AI Workflow");
 const savedWorkflowId = ref(props.initialWorkflowId || null);
+const viewMode = ref<"visual" | "json">("visual");
 
 // Deployment state
 const workspaces = ref<any[]>([]);
@@ -233,25 +239,57 @@ onMounted(fetchInitialData);
           class="flex-1 bg-surface-elevated border border-border rounded-2xl overflow-hidden flex flex-col"
         >
           <div
-            class="bg-black/40 px-4 py-3 border-b border-border flex items-center justify-between"
+            class="bg-black/40 px-4 py-2 border-b border-border flex items-center justify-between min-h-[52px]"
           >
-            <div class="flex items-center gap-2">
-              <Terminal class="size-4 text-muted-foreground" />
-              <span class="text-xs font-mono text-muted-foreground">n8n_blueprint.json</span>
+            <div
+              class="flex items-center gap-1 bg-surface-container-highest p-1 rounded-full border border-outline-variant"
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                :class="
+                  cn(
+                    '!h-7 !px-3 !text-[10px] !rounded-full transition-all',
+                    viewMode === 'visual'
+                      ? 'bg-primary text-on-primary shadow-lg shadow-primary/20'
+                      : 'text-on-surface/40',
+                  )
+                "
+                @click="viewMode = 'visual'"
+              >
+                <LayoutDashboard class="size-3 mr-1.5" />
+                Visual
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                :class="
+                  cn(
+                    '!h-7 !px-3 !text-[10px] !rounded-full transition-all',
+                    viewMode === 'json'
+                      ? 'bg-primary text-on-primary shadow-lg shadow-primary/20'
+                      : 'text-on-surface/40',
+                  )
+                "
+                @click="viewMode = 'json'"
+              >
+                <FileCode class="size-3 mr-1.5" />
+                JSON
+              </Button>
             </div>
             <div v-if="generatedJson" class="flex items-center gap-2">
               <Button
                 @click="generateWorkflow"
-                variant="ghost"
+                variant="primary"
                 size="sm"
-                class="h-7 text-[10px] !px-2"
+                class="!h-7 !text-[10px] !px-3"
               >
-                <RefreshCcw class="size-3 mr-1" /> Regenerate
+                <RefreshCcw class="size-3 mr-1.5" /> Regenerate
               </Button>
             </div>
           </div>
 
-          <div class="flex-1 overflow-auto p-6 font-mono text-sm relative">
+          <div class="flex-1 overflow-auto font-mono text-sm relative">
             <div
               v-if="isGenerating"
               class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10"
@@ -272,11 +310,18 @@ onMounted(fetchInitialData);
               </div>
             </div>
 
-            <JsonViewer
-              v-if="generatedJson"
-              :data="generatedJson"
-              class="flex-1 bg-transparent border-none p-0"
-            />
+            <template v-if="generatedJson">
+              <WorkflowVisualizer
+                v-if="viewMode === 'visual'"
+                :nodes="generatedJson.nodes"
+                :connections="generatedJson.connections"
+              />
+              <JsonViewer
+                v-else
+                :data="generatedJson"
+                class="flex-1 bg-transparent border-none p-6"
+              />
+            </template>
             <div
               v-else
               class="h-full flex flex-col items-center justify-center text-center opacity-30 grayscale"
