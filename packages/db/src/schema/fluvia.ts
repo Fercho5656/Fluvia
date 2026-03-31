@@ -25,6 +25,7 @@ export const customWorkflow = pgTable(
     name: text("name").notNull(),
     description: text("description"), // Original prompt/context
     n8nJson: jsonb("n8n_json").notNull(),
+    blueprint: jsonb("blueprint"), // Simplified AI representation for editing
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

@@ -367,6 +367,7 @@ export const fluviaRouter = {
         z.object({
           name: z.string(),
           n8nJson: z.any(),
+          blueprint: z.any().optional(),
           description: z.string().optional(),
         }),
       )
@@ -376,6 +377,7 @@ export const fluviaRouter = {
           id,
           name: input.name,
           n8nJson: input.n8nJson,
+          blueprint: input.blueprint,
           description: input.description,
           userId: context.session.user.id,
         });
@@ -388,6 +390,7 @@ export const fluviaRouter = {
           id: z.string(),
           name: z.string().optional(),
           n8nJson: z.any().optional(),
+          blueprint: z.any().optional(),
           description: z.string().optional(),
         }),
       )
@@ -397,6 +400,7 @@ export const fluviaRouter = {
           .set({
             name: input.name,
             n8nJson: input.n8nJson,
+            blueprint: input.blueprint,
             description: input.description,
             updatedAt: new Date(),
           })
@@ -430,13 +434,20 @@ export const fluviaRouter = {
         z.object({
           prompt: z.string(),
           name: z.string().default("New AI Workflow"),
+          currentBlueprint: z.any().optional(),
         }),
       )
       .handler(async ({ input }) => {
+        let fullPrompt = input.prompt;
+
+        if (input.currentBlueprint) {
+          fullPrompt = `Current workflow state: ${JSON.stringify(input.currentBlueprint)}\n\nUser request: ${input.prompt}\n\nPlease modify the current workflow according to the user request. Return the entire updated JSON object.`;
+        }
+
         const { text } = await generateText({
           model: openrouter("nvidia/nemotron-3-nano-30b-a3b:free"),
           system: SYSTEM_PROMPT,
-          prompt: input.prompt,
+          prompt: fullPrompt,
         });
 
         try {
@@ -450,7 +461,7 @@ export const fluviaRouter = {
           // Expand high-level blueprint into full n8n JSON
           const n8nJson = N8NBuilder.build(blueprint);
 
-          return { n8nJson };
+          return { n8nJson, blueprint };
         } catch (e) {
           throw new ORPCError("INTERNAL_SERVER_ERROR", {
             message: "Failed to generate valid n8n JSON from AI blueprint",

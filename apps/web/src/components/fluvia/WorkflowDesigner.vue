@@ -17,6 +17,9 @@ import {
   Code2,
   LayoutDashboard,
   FileCode,
+  Send,
+  User,
+  Bot,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import JsonViewer from "@/components/ui/JsonViewer.vue";
@@ -32,9 +35,13 @@ const isGenerating = ref(false);
 const isSaving = ref(false);
 const isDeploying = ref(false);
 const generatedJson = ref<any>(null);
+const currentBlueprint = ref<any>(null);
 const workflowName = ref("New AI Workflow");
 const savedWorkflowId = ref(props.initialWorkflowId || null);
 const viewMode = ref<"visual" | "json">("visual");
+
+// Chat state
+const chatHistory = ref<{ role: "user" | "assistant"; content: string }[]>([]);
 
 // Deployment state
 const workspaces = ref<any[]>([]);
@@ -55,8 +62,12 @@ async function fetchInitialData() {
     try {
       const wf = await orpc.fluvia.customWorkflow.get({ id: savedWorkflowId.value });
       generatedJson.value = wf.n8nJson;
+      currentBlueprint.value = (wf as any).blueprint || null;
       workflowName.value = wf.name;
-      prompt.value = wf.description || "";
+      if (wf.description) {
+        chatHistory.value.push({ role: "user", content: wf.description });
+        chatHistory.value.push({ role: "assistant", content: "Blueprint loaded from library." });
+      }
     } catch (e) {
       console.error("Failed to fetch workflow:", e);
     }
@@ -72,19 +83,36 @@ async function fetchInitialData() {
 async function generateWorkflow() {
   if (!prompt.value || isGenerating.value) return;
 
+  const userInstruction = prompt.value;
+  chatHistory.value.push({ role: "user", content: userInstruction });
+  prompt.value = "";
   isGenerating.value = true;
-  generatedJson.value = null;
   deploySuccess.value = false;
 
   try {
     const result = await orpc.fluvia.workflow.generate({
-      prompt: prompt.value,
+      prompt: userInstruction,
       name: workflowName.value,
+      currentBlueprint: currentBlueprint.value,
     });
+
     generatedJson.value = result.n8nJson;
-    toastStore.info("Workflow blueprint generated.");
+    currentBlueprint.value = result.blueprint;
+
+    chatHistory.value.push({
+      role: "assistant",
+      content: currentBlueprint.value
+        ? "I've updated the workflow based on your request."
+        : "Workflow blueprint generated.",
+    });
+
+    toastStore.info("Workflow updated.");
   } catch (error) {
     console.error("Generation failed:", error);
+    chatHistory.value.push({
+      role: "assistant",
+      content: "Sorry, I encountered an error while processing your request.",
+    });
     toastStore.error("Failed to generate workflow.");
   } finally {
     isGenerating.value = false;
@@ -96,19 +124,23 @@ async function saveBlueprint() {
 
   isSaving.value = true;
   try {
+    const lastInstruction = chatHistory.value.filter((c) => c.role === "user").pop()?.content || "";
+
     if (savedWorkflowId.value) {
       await orpc.fluvia.customWorkflow.update({
         id: savedWorkflowId.value,
         name: workflowName.value,
         n8nJson: generatedJson.value,
-        description: prompt.value,
+        blueprint: currentBlueprint.value,
+        description: lastInstruction,
       });
       toastStore.info("Blueprint updated.");
     } else {
       const result = await orpc.fluvia.customWorkflow.create({
         name: workflowName.value,
         n8nJson: generatedJson.value,
-        description: prompt.value,
+        blueprint: currentBlueprint.value,
+        description: lastInstruction,
       });
       savedWorkflowId.value = result.id;
       toastStore.info("Blueprint saved to library.");
@@ -124,7 +156,6 @@ async function saveBlueprint() {
 async function deployToSelectedServer() {
   if (!selectedServerId.value || !generatedJson.value || isDeploying.value) return;
 
-  // 1. Check if server has API Key configured
   const selectedServer = workspaces.value
     .flatMap((ws) => ws.servers || [])
     .find((s) => s.id === selectedServerId.value);
@@ -134,7 +165,6 @@ async function deployToSelectedServer() {
     return;
   }
 
-  // 2. Auto-save before deploy if it's new
   if (!savedWorkflowId.value) {
     await saveBlueprint();
   }
@@ -197,39 +227,172 @@ onMounted(fetchInitialData);
     </div>
 
     <div class="flex-1 flex gap-6 min-h-0">
-      <!-- Left: AI Input Panel -->
+      <!-- Left: AI Input Panel (Chat) -->
       <div class="w-1/3 flex flex-col gap-4">
         <div
-          class="flex-1 bg-surface-elevated border border-border rounded-2xl p-6 flex flex-col gap-6"
+          class="flex-1 bg-surface-elevated border border-border rounded-2xl flex flex-col overflow-hidden"
         >
-          <div class="space-y-2">
-            <div class="bg-primary/10 w-fit p-2 rounded-full">
-              <Sparkles class="size-5 text-primary" />
+          <!-- Chat Header -->
+          <div class="p-6 border-b border-border bg-white/[0.02]">
+            <div class="flex items-center gap-3">
+              <div class="bg-primary/10 p-2 rounded-full">
+                <Sparkles class="size-5 text-primary" />
+              </div>
+              <div>
+                <h2 class="text-xl font-bold text-white tracking-tight">AI Architect</h2>
+                <p class="text-[10px] uppercase tracking-widest text-on-surface/40 font-bold">
+                  Iterative Workflow Design
+                </p>
+              </div>
             </div>
-            <h2 class="text-2xl font-bold text-white tracking-tight">AI Workflow Agent</h2>
-            <p class="text-sm text-muted-foreground">
-              Describe your business logic. We'll generate a production-ready blueprint.
+          </div>
+
+          <!-- Chat History -->
+          <div class="flex-1 overflow-auto p-6 space-y-6">
+            <div
+              v-if="chatHistory.length === 0"
+              class="h-full flex flex-col items-center justify-center text-center px-4"
+            >
+              <Bot class="size-12 text-on-surface/10 mb-4" />
+              <p class="text-sm text-on-surface/40 italic">
+                "Describe the automation you need, and I'll build the blueprint for you."
+              </p>
+            </div>
+            <div
+              v-for="(msg, i) in chatHistory"
+              :key="i"
+              :class="cn('flex flex-col gap-2', msg.role === 'user' ? 'items-end' : 'items-start')"
+            >
+              <div class="flex items-center gap-2 px-1">
+                <component
+                  :is="msg.role === 'user' ? User : Bot"
+                  class="size-3 text-on-surface/40"
+                />
+                <span class="text-[9px] uppercase font-bold tracking-widest text-on-surface/40">
+                  {{ msg.role === "user" ? "Me" : "Architect" }}
+                </span>
+              </div>
+              <div
+                :class="
+                  cn(
+                    'max-w-[90%] px-4 py-3 rounded-2xl text-xs leading-relaxed',
+                    msg.role === 'user'
+                      ? 'bg-primary/10 border border-primary/20 text-primary-container font-medium'
+                      : 'bg-white/5 border border-white/10 text-on-surface/80',
+                  )
+                "
+              >
+                {{ msg.content }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input -->
+          <div class="p-4 bg-black/20 border-t border-border">
+            <div class="relative">
+              <textarea
+                v-model="prompt"
+                placeholder="Ask to build or modify..."
+                class="w-full bg-surface-container border border-outline-variant rounded-2xl p-4 pr-12 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none placeholder:text-muted-foreground/30 transition-all min-h-[100px]"
+                @keydown.enter.prevent.exact="generateWorkflow"
+              ></textarea>
+              <Button
+                @click="generateWorkflow"
+                :disabled="!prompt || isGenerating"
+                variant="primary"
+                size="sm"
+                class="absolute bottom-3 right-3 h-8 w-8 !p-0"
+              >
+                <Loader2 v-if="isGenerating" class="size-4 animate-spin" />
+                <Send v-else class="size-4" />
+              </Button>
+            </div>
+            <p
+              class="mt-2 text-[9px] text-center text-on-surface/20 uppercase font-bold tracking-tighter"
+            >
+              Press Enter to send instruction
             </p>
           </div>
+        </div>
 
-          <div class="flex-1 flex flex-col gap-4">
-            <textarea
-              v-model="prompt"
-              placeholder="e.g. When a new row is added to Google Sheets, send a Slack message..."
-              class="flex-1 bg-black/20 border border-white/10 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none placeholder:text-muted-foreground/50 transition-all"
-            ></textarea>
+        <!-- Deployment Control -->
+        <div class="bg-surface-elevated border border-border rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="bg-emerald-500/10 p-1.5 rounded-full">
+                <CloudUpload class="size-4 text-emerald-400" />
+              </div>
+              <h3 class="text-sm font-bold text-white uppercase tracking-wider">Deploy</h3>
+            </div>
 
-            <Button
-              @click="generateWorkflow"
-              :disabled="isGenerating || !prompt"
-              size="lg"
-              class="w-full"
-            >
-              <Loader2 v-if="isGenerating" class="size-5 animate-spin mr-2" />
-              <Sparkles v-else class="size-5 mr-2" />
-              {{ isGenerating ? "Agent is working..." : "Generate Blueprint" }}
-            </Button>
+            <!-- Target Server Selection -->
+            <div class="relative">
+              <Button
+                @click="showDeployMenu = !showDeployMenu"
+                variant="secondary"
+                size="sm"
+                class="h-8 !px-3"
+              >
+                <span class="max-w-[100px] truncate">{{
+                  selectedServerUrl || "Select Target"
+                }}</span>
+                <ChevronDown class="size-4 ml-2" />
+              </Button>
+
+              <div
+                v-if="showDeployMenu"
+                class="absolute bottom-full right-0 mb-2 w-64 glass-panel rounded-2xl overflow-hidden shadow-2xl z-50 p-2"
+              >
+                <div v-for="ws in workspaces" :key="ws.id" class="mb-2 last:mb-0">
+                  <span class="text-[10px] uppercase font-bold text-on-surface/40 px-2">{{
+                    ws.name
+                  }}</span>
+                  <Button
+                    v-for="srv in ws.servers"
+                    :key="srv.id"
+                    @click="
+                      selectedServerId = srv.id;
+                      showDeployMenu = false;
+                    "
+                    variant="ghost"
+                    size="sm"
+                    class="w-full !justify-between !px-2 !h-9"
+                  >
+                    <div class="flex items-center gap-2 overflow-hidden">
+                      <span
+                        :class="
+                          cn(
+                            'truncate',
+                            selectedServerId === srv.id
+                              ? 'text-white font-bold'
+                              : 'text-muted-foreground',
+                          )
+                        "
+                      >
+                        {{ srv.url.split("//")[1] }}
+                      </span>
+                      <ShieldCheck v-if="srv.n8nApiKey" class="size-3 text-emerald-400 shrink-0" />
+                    </div>
+                    <div
+                      v-if="selectedServerId === srv.id"
+                      class="size-1.5 rounded-full bg-primary shrink-0 mr-1"
+                    ></div>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <Button
+            @click="deployToSelectedServer"
+            :disabled="!generatedJson || !selectedServerId || isDeploying"
+            class="w-full"
+            size="md"
+          >
+            <Loader2 v-if="isDeploying" class="size-4 animate-spin mr-2" />
+            <CloudUpload v-else class="size-4 mr-2" />
+            {{ deploySuccess ? "Pushed Successfully" : "Push to Live Instance" }}
+          </Button>
         </div>
       </div>
 
@@ -279,12 +442,16 @@ onMounted(fetchInitialData);
             </div>
             <div v-if="generatedJson" class="flex items-center gap-2">
               <Button
-                @click="generateWorkflow"
-                variant="primary"
+                @click="
+                  currentBlueprint = null;
+                  generatedJson = null;
+                  chatHistory = [];
+                "
+                variant="ghost"
                 size="sm"
                 class="!h-7 !text-[10px] !px-3"
               >
-                <RefreshCcw class="size-3 mr-1.5" /> Regenerate
+                Reset
               </Button>
             </div>
           </div>
@@ -305,7 +472,7 @@ onMounted(fetchInitialData);
                   ></div>
                 </div>
                 <span class="text-xs text-primary font-bold uppercase tracking-widest"
-                  >Generating Nodes</span
+                  >Processing Instructions</span
                 >
               </div>
             </div>
@@ -328,102 +495,6 @@ onMounted(fetchInitialData);
             >
               <Terminal class="size-12 mb-4" />
               <p class="text-sm max-w-xs">Your AI-generated blueprint will appear here.</p>
-            </div>
-          </div>
-
-          <!-- Deploy Bar -->
-          <div
-            class="bg-black/40 px-6 py-4 border-t border-border flex items-center justify-between"
-          >
-            <div class="flex flex-col">
-              <span class="text-[10px] text-muted-foreground font-bold uppercase tracking-widest"
-                >Deployment Target</span
-              >
-              <div v-if="!deploySuccess" class="relative">
-                <Button
-                  @click="showDeployMenu = !showDeployMenu"
-                  variant="secondary"
-                  size="sm"
-                  class="mt-1 h-8"
-                >
-                  {{ selectedServerUrl || "Select Target Server" }}
-                  <ChevronDown class="size-4 ml-2" />
-                </Button>
-
-                <!-- Simple Dropdown -->
-                <div
-                  v-if="showDeployMenu"
-                  class="absolute bottom-full left-0 mb-2 w-64 glass-panel rounded-2xl overflow-hidden shadow-2xl z-50 p-2"
-                >
-                  <div v-for="ws in workspaces" :key="ws.id" class="mb-2 last:mb-0">
-                    <span class="text-[10px] uppercase font-bold text-on-surface/40 px-2">{{
-                      ws.name
-                    }}</span>
-                    <Button
-                      v-for="srv in ws.servers"
-                      :key="srv.id"
-                      @click="
-                        selectedServerId = srv.id;
-                        showDeployMenu = false;
-                      "
-                      variant="ghost"
-                      size="sm"
-                      class="w-full !justify-between !px-2 !h-9"
-                    >
-                      <div class="flex items-center gap-2 overflow-hidden">
-                        <span
-                          :class="
-                            cn(
-                              'truncate',
-                              selectedServerId === srv.id
-                                ? 'text-white font-bold'
-                                : 'text-muted-foreground',
-                            )
-                          "
-                        >
-                          {{ srv.url.split("//")[1] }}
-                        </span>
-                        <ShieldCheck
-                          v-if="srv.n8nApiKey"
-                          class="size-3 text-emerald-400 shrink-0"
-                        />
-                      </div>
-                      <div
-                        v-if="selectedServerId === srv.id"
-                        class="size-1.5 rounded-full bg-primary shrink-0 mr-1"
-                      ></div>
-                    </Button>
-                  </div>
-                  <div v-if="workspaces.length === 0" class="p-4 text-center">
-                    <p class="text-[10px] text-muted-foreground mb-2">No servers found</p>
-                    <a
-                      href="/dashboard"
-                      class="text-[10px] text-primary font-bold uppercase hover:underline"
-                      >Provision Now</a
-                    >
-                  </div>
-                </div>
-              </div>
-              <span v-else class="text-sm font-bold text-emerald-400 mt-1"
-                >Deployed Successfully</span
-              >
-            </div>
-
-            <Button
-              v-if="generatedJson && !deploySuccess"
-              @click="deployToSelectedServer"
-              :disabled="!selectedServerId || isDeploying"
-              variant="primary"
-              size="md"
-              class="px-6"
-            >
-              <Loader2 v-if="isDeploying" class="size-4 animate-spin mr-2" />
-              <CloudUpload v-else class="size-4 mr-2" />
-              Deploy to Server
-            </Button>
-            <div v-else-if="deploySuccess" class="flex items-center gap-2 text-emerald-400">
-              <CheckCircle2 class="size-5" />
-              <span class="text-sm font-bold">Live</span>
             </div>
           </div>
         </div>
