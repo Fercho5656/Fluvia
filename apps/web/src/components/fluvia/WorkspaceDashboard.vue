@@ -669,9 +669,9 @@ const stats = computed(() => [
               </Button>
               <Button
                 @click="openExternalModal(ws.id)"
-                variant="ghost"
+                variant="outline"
                 size="md"
-                class="border border-white/5 bg-white/[0.02]"
+                class="!border-white/10 text-on-surface/60 hover:text-on-surface hover:!bg-white/5"
               >
                 <ExternalLink class="size-4 mr-2" />
                 Link External Instance
