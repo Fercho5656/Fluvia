@@ -57,6 +57,8 @@ export class CubePathService {
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    console.log(`[CubePath] Requesting ${endpoint} with options:`, options);
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers: {
@@ -67,15 +69,27 @@ export class CubePathService {
       },
     });
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const error = (await response.json().catch(() => ({
-        message: response.statusText,
-      }))) as { message?: string };
-      throw new Error(`CubePath API Error: ${error.message || response.statusText}`);
+      let errorMessage = response.statusText;
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        errorMessage = responseText || errorMessage;
+      }
+      throw new Error(`CubePath API Error: ${errorMessage}`);
     }
 
-    if (response.status === 204) return {} as T;
-    return (await response.json()) as T;
+    if (response.status === 204 || !responseText) return {} as T;
+
+    try {
+      return JSON.parse(responseText) as T;
+    } catch (e) {
+      console.error("[CubePath] JSON Parse Error. Raw body:", responseText);
+      throw new Error("Failed to parse CubePath API response.");
+    }
   }
 
   static async listVps() {
