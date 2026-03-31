@@ -763,14 +763,42 @@ const stats = computed(() => [
               I have safely stored this password and understand it won't be shown again.
             </label>
           </div>
-          <Button
-            @click="showProvisionModal = false"
-            :disabled="!passwordConfirmed"
-            class="w-full"
-            size="lg"
-          >
-            Continue to Dashboard
-          </Button>
+
+          <!-- Post-creation guidance -->
+          <div class="bg-primary/5 border border-primary/10 rounded-2xl p-5 flex items-start gap-4">
+            <div class="bg-primary/10 p-2 rounded-xl shrink-0">
+              <Sparkles class="size-5 text-primary" />
+            </div>
+            <div class="space-y-1">
+              <h5 class="text-xs font-bold text-white uppercase tracking-wider">
+                Deployment in progress
+              </h5>
+              <p class="text-[11px] text-on-surface/50 leading-relaxed">
+                Background services typically take <strong>5-7 minutes</strong> to fully initialize.
+                In the meantime, you can start architecting your automations.
+              </p>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <Button
+              @click="showProvisionModal = false"
+              :disabled="!passwordConfirmed"
+              class="flex-1"
+              variant="secondary"
+            >
+              To Dashboard
+            </Button>
+            <Button
+              href="/designer"
+              :disabled="!passwordConfirmed"
+              class="flex-1"
+              variant="primary"
+            >
+              <Sparkles class="size-4 mr-2" />
+              Try AI Designer
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>

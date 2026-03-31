@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const baseStyles =
-  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap rounded-full";
+  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer whitespace-nowrap rounded-full";
 
 const variants = {
   primary:
@@ -39,15 +39,32 @@ const sizes = {
 };
 
 const componentType = computed(() => (props.href ? "a" : "button"));
+
+// Handle clicks on disabled links manually as native <a> doesn't support disabled attribute
+function handleClick(e: MouseEvent) {
+  if (props.disabled) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}
 </script>
 
 <template>
   <component
     :is="componentType"
-    :href="href"
+    :href="disabled ? undefined : href"
     :type="!href ? type : undefined"
     :disabled="disabled"
-    :class="cn(baseStyles, variants[variant], sizes[size], props.class)"
+    @click="handleClick"
+    :class="
+      cn(
+        baseStyles,
+        variants[variant],
+        sizes[size],
+        disabled && 'opacity-40 cursor-not-allowed pointer-events-none',
+        props.class,
+      )
+    "
   >
     <slot />
   </component>
