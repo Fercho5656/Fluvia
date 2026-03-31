@@ -178,7 +178,7 @@ onMounted(fetchInitialData);
         <button
           @click="saveBlueprint"
           :disabled="!generatedJson || isSaving"
-          class="bg-surface-elevated border border-border px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-surface-highest transition-all"
+          class="bg-surface-elevated border border-border px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-surface-highest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Loader2 v-if="isSaving" class="size-4 animate-spin" />
           <Save v-else class="size-4" />
@@ -213,11 +213,11 @@ onMounted(fetchInitialData);
             <button
               @click="generateWorkflow"
               :disabled="isGenerating || !prompt"
-              class="bg-primary hover:bg-primary/90 disabled:opacity-50 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20"
+              class="bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-on-primary w-full py-4 rounded-full font-bold flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20"
             >
-              <Loader2 v-if="isGenerating" class="size-4 animate-spin" />
-              <Cpu v-else class="size-4" />
-              Generate Blueprint
+              <Loader2 v-if="isGenerating" class="size-5 animate-spin" />
+              <Sparkles v-else class="size-5" />
+              {{ isGenerating ? "Agent is working..." : "Generate Blueprint" }}
             </button>
           </div>
         </div>
@@ -291,7 +291,7 @@ onMounted(fetchInitialData);
               <div v-if="!deploySuccess" class="relative">
                 <button
                   @click="showDeployMenu = !showDeployMenu"
-                  class="flex items-center gap-2 text-sm font-medium text-white/80 hover:text-white"
+                  class="flex items-center gap-2 text-sm font-medium text-white/80 hover:text-white bg-white/5 px-3 py-1.5 rounded-full border border-white/10 mt-1"
                 >
                   {{ selectedServerUrl || "Select Target Server" }}
                   <ChevronDown class="size-4" />
@@ -300,14 +300,10 @@ onMounted(fetchInitialData);
                 <!-- Simple Dropdown -->
                 <div
                   v-if="showDeployMenu"
-                  class="absolute bottom-full left-0 mb-2 w-64 glass-panel rounded-xl overflow-hidden shadow-2xl z-50"
+                  class="absolute bottom-full left-0 mb-2 w-64 glass-panel rounded-2xl overflow-hidden shadow-2xl z-50 p-2"
                 >
-                  <div
-                    v-for="ws in workspaces"
-                    :key="ws.id"
-                    class="p-2 border-b border-white/5 last:border-0"
-                  >
-                    <span class="text-[10px] uppercase font-bold text-primary px-2">{{
+                  <div v-for="ws in workspaces" :key="ws.id" class="mb-2 last:mb-0">
+                    <span class="text-[10px] uppercase font-bold text-on-surface/40 px-2">{{
                       ws.name
                     }}</span>
                     <button
@@ -317,7 +313,7 @@ onMounted(fetchInitialData);
                         selectedServerId = srv.id;
                         showDeployMenu = false;
                       "
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-lg text-xs flex items-center justify-between"
+                      class="w-full text-left p-2 hover:bg-white/5 rounded-full text-xs flex items-center justify-between"
                     >
                       <div class="flex items-center gap-2 overflow-hidden">
                         <span
@@ -339,26 +335,30 @@ onMounted(fetchInitialData);
                       </div>
                       <div
                         v-if="selectedServerId === srv.id"
-                        class="size-1.5 rounded-full bg-primary shrink-0"
+                        class="size-1.5 rounded-full bg-primary shrink-0 mr-1"
                       ></div>
                     </button>
                   </div>
                   <div v-if="workspaces.length === 0" class="p-4 text-center">
                     <p class="text-[10px] text-muted-foreground mb-2">No servers found</p>
-                    <a href="/dashboard" class="text-[10px] text-primary font-bold uppercase"
+                    <a
+                      href="/dashboard"
+                      class="text-[10px] text-primary font-bold uppercase hover:underline"
                       >Provision Now</a
                     >
                   </div>
                 </div>
               </div>
-              <span v-else class="text-sm font-medium text-emerald-400">Deployed Successfully</span>
+              <span v-else class="text-sm font-bold text-emerald-400 mt-1"
+                >Deployed Successfully</span
+              >
             </div>
 
             <button
               v-if="generatedJson && !deploySuccess"
               @click="deployToSelectedServer"
               :disabled="!selectedServerId || isDeploying"
-              class="bg-accent hover:bg-accent/90 disabled:opacity-50 text-accent-foreground px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all"
+              class="bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-on-primary px-6 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
             >
               <Loader2 v-if="isDeploying" class="size-4 animate-spin" />
               <CloudUpload v-else class="size-4" />

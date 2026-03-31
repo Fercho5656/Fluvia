@@ -456,13 +456,13 @@ const vFocus = {
                     <div class="flex gap-1 shrink-0">
                       <button
                         @click="saveWorkspaceName"
-                        class="text-emerald-400 hover:text-emerald-300 transition-colors p-1"
+                        class="text-emerald-400 hover:text-emerald-300 transition-colors p-1.5 bg-emerald-500/10 rounded-full"
                       >
                         <Check class="size-4" />
                       </button>
                       <button
                         @click="editingWorkspaceId = null"
-                        class="text-on-surface/20 hover:text-on-surface transition-colors p-1"
+                        class="text-on-surface/40 hover:text-on-surface transition-colors p-1.5 bg-white/5 rounded-full"
                       >
                         <X class="size-4" />
                       </button>
@@ -474,7 +474,7 @@ const vFocus = {
                     </h4>
                     <button
                       @click="startEditing(ws)"
-                      class="p-1 hover:bg-surface-container-highest rounded text-on-surface/30 hover:text-primary transition-colors"
+                      class="p-1.5 hover:bg-surface-container-highest rounded-full text-on-surface/40 hover:text-primary transition-colors"
                     >
                       <Pencil class="size-4" />
                     </button>
@@ -521,7 +521,7 @@ const vFocus = {
               </template>
               <button
                 @click="deleteWorkspace(ws.id)"
-                class="p-2 hover:bg-rose-500/10 rounded-lg text-on-surface/20 hover:text-rose-500 transition-colors ml-auto sm:ml-0"
+                class="p-2 hover:bg-rose-500/10 rounded-full text-on-surface/20 hover:text-rose-500 transition-colors ml-auto sm:ml-0"
               >
                 <Trash2 class="size-4" />
               </button>
@@ -612,7 +612,7 @@ const vFocus = {
               <button
                 v-if="ws.servers[0].status === 'stopped'"
                 @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-emerald-500/10 border border-outline-variant hover:border-emerald-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
               >
                 <Play class="size-3.5 text-emerald-500" />
                 <span class="truncate">Resume</span>
@@ -620,28 +620,28 @@ const vFocus = {
               <button
                 v-if="ws.servers[0].status === 'active'"
                 @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-white/5 border border-outline-variant rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
               >
                 <Square class="size-3.5 text-on-surface/40" />
                 <span class="truncate">Stop</span>
               </button>
               <button
                 @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-amber-500/10 border border-outline-variant hover:border-amber-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
               >
                 <RotateCw class="size-3.5 text-amber-500" />
                 <span class="truncate">Restart</span>
               </button>
               <button
                 @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-surface-container-highest border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-blue-500/10 border border-outline-variant hover:border-blue-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
               >
                 <RefreshCcw class="size-3.5 text-blue-500" />
                 <span class="truncate">Reinstall</span>
               </button>
               <button
                 @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-error/10 hover:border-error/40 border border-outline-variant rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all text-on-surface/60 hover:text-error"
+                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-rose-500/10 hover:border-rose-500/40 border border-outline-variant rounded-full text-[10px] font-bold uppercase tracking-wider transition-all text-on-surface/60 hover:text-rose-500"
               >
                 <Trash2 class="size-3.5" />
                 <span class="truncate">Delete</span>

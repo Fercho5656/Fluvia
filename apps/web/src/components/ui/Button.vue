@@ -18,15 +18,15 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const baseStyles =
-  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer whitespace-nowrap";
+  "inline-flex items-center justify-center font-label font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap rounded-full";
 
 const variants = {
   primary:
-    "bg-primary-container text-white electric-glow hover:bg-inverse-primary hover:-translate-y-0.5",
+    "bg-primary text-on-primary shadow-lg shadow-primary/20 hover:bg-primary/90 hover:-translate-y-0.5",
   secondary:
-    "bg-surface-container-highest/40 backdrop-blur-md border border-outline-variant/30 text-on-surface hover:bg-surface-container-highest",
-  tertiary: "text-on-surface hover:bg-surface-container-highest/50",
-  outline: "border border-outline-variant text-on-surface hover:bg-surface-container-highest",
+    "bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-container-highest/80",
+  tertiary: "text-on-surface hover:bg-surface-container-highest",
+  outline: "border border-outline text-on-surface hover:bg-surface-container-highest",
 };
 
 const sizes = {

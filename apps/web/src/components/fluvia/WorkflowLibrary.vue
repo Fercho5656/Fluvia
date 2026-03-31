@@ -54,7 +54,7 @@ onMounted(fetchWorkflows);
 
       <a
         href="/dashboard/designer"
-        class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
+        class="bg-primary hover:bg-primary/90 text-on-primary px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
       >
         <Sparkles class="size-4" />
         Create New
@@ -83,16 +83,16 @@ onMounted(fetchWorkflows);
       <div
         v-for="wf in workflows"
         :key="wf.id"
-        class="group bg-surface-elevated border border-border hover:border-primary/30 rounded-xl p-6 transition-all duration-300"
+        class="group bg-surface-elevated border border-border hover:border-primary/30 rounded-2xl p-6 transition-all duration-300"
       >
         <div class="space-y-4">
           <div class="flex items-start justify-between">
-            <div class="bg-primary/10 p-3 rounded-xl">
+            <div class="bg-primary/10 p-3 rounded-2xl">
               <Database class="size-6 text-primary" />
             </div>
             <button
               @click="deleteWorkflow(wf.id)"
-              class="p-2 hover:bg-rose-500/10 rounded-lg text-muted-foreground hover:text-rose-500 transition-colors"
+              class="p-2 hover:bg-rose-500/10 rounded-full text-muted-foreground hover:text-rose-500 transition-colors"
             >
               <Trash2 class="size-4" />
             </button>
