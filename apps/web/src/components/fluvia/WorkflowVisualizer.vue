@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button.vue";
 interface N8nNode {
   name: string;
   type: string;
-  position: [number, number];
+  position: number[];
   parameters: Record<string, any>;
 }
 
