@@ -316,6 +316,7 @@ export const fluviaRouter = {
             .set({
               status: "deploying",
               passwordHash: newPasswordHash,
+              n8nApiKey: null,
               updatedAt: new Date(),
             })
             .where(eq(server.id, input.id));
