@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Database,
 } from "lucide-vue-next";
+import Button from "@/components/ui/Button.vue";
 
 const workflows = ref<any[]>([]);
 const loading = ref(true);
@@ -52,13 +53,10 @@ onMounted(fetchWorkflows);
         </p>
       </div>
 
-      <a
-        href="/dashboard/designer"
-        class="bg-primary hover:bg-primary/90 text-on-primary px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
-      >
-        <Sparkles class="size-4" />
-        Create New
-      </a>
+      <Button href="/dashboard/designer" variant="primary" size="md">
+        <Sparkles class="size-4 mr-2" />
+        Create New Blueprint
+      </Button>
     </div>
 
     <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
@@ -90,12 +88,9 @@ onMounted(fetchWorkflows);
             <div class="bg-primary/10 p-3 rounded-2xl">
               <Database class="size-6 text-primary" />
             </div>
-            <button
-              @click="deleteWorkflow(wf.id)"
-              class="p-2 hover:bg-rose-500/10 rounded-full text-muted-foreground hover:text-rose-500 transition-colors"
-            >
+            <Button @click="deleteWorkflow(wf.id)" variant="danger" size="sm" class="h-9 w-9 !p-0">
               <Trash2 class="size-4" />
-            </button>
+            </Button>
           </div>
 
           <div class="space-y-1">
@@ -104,7 +99,7 @@ onMounted(fetchWorkflows);
             >
               {{ wf.name }}
             </h3>
-            <p class="text-xs text-muted-foreground line-clamp-2 min-h-8 italic">
+            <p class="text-xs text-on-surface/40 line-clamp-2 min-h-8 italic">
               "{{ wf.description }}"
             </p>
           </div>
@@ -113,13 +108,15 @@ onMounted(fetchWorkflows);
             <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
               {{ new Date(wf.createdAt).toLocaleDateString() }}
             </span>
-            <a
+            <Button
               :href="`/dashboard/designer?id=${wf.id}`"
-              class="text-xs font-bold text-white flex items-center gap-1 hover:gap-2 transition-all"
+              variant="ghost"
+              size="sm"
+              class="!h-8 !px-3"
             >
               Configure
-              <ArrowRight class="size-3" />
-            </a>
+              <ArrowRight class="size-3 ml-1" />
+            </Button>
           </div>
         </div>
       </div>

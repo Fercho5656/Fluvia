@@ -299,34 +299,6 @@ async function deleteWorkspace(id: string) {
   }
 }
 
-const activeServersCount = computed(
-  () => workspaces.value.filter((w) => w.servers?.some((s: any) => s.status === "active")).length,
-);
-
-const totalWorkflowsCount = computed(() =>
-  workspaces.value.reduce((acc, w) => {
-    const serverWorkflows =
-      w.servers?.reduce((sAcc: number, s: any) => sAcc + (s.workflows?.length || 0), 0) || 0;
-    return acc + serverWorkflows;
-  }, 0),
-);
-
-const provisioningServersCount = computed(
-  () =>
-    workspaces.value.filter((w) => w.servers?.some((s: any) => s.status === "provisioning")).length,
-);
-
-const filteredWorkspaces = computed(() => {
-  if (!searchQuery.value) return workspaces.value;
-  const query = searchQuery.value.toLowerCase();
-  return workspaces.value.filter(
-    (ws) =>
-      ws.name.toLowerCase().includes(query) ||
-      ws.id.toLowerCase().includes(query) ||
-      ws.servers?.some((s: any) => s.url.toLowerCase().includes(query)),
-  );
-});
-
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
   toastStore.info("Copied to clipboard");
@@ -336,148 +308,158 @@ function copyToClipboard(text: string) {
 const vFocus = {
   mounted: (el: HTMLInputElement) => el.focus(),
 };
+
+const filteredWorkspaces = computed(() => {
+  if (!searchQuery.value) return workspaces.value;
+  const q = searchQuery.value.toLowerCase();
+  return workspaces.value.filter(
+    (ws) => ws.name.toLowerCase().includes(q) || ws.id.toLowerCase().includes(q),
+  );
+});
+
+const stats = computed(() => [
+  {
+    label: "Managed Clients",
+    value: workspaces.value.length,
+    icon: Database,
+    color: "text-primary",
+  },
+  {
+    label: "Active Nodes",
+    value: workspaces.value.reduce((acc, ws) => acc + (ws.servers?.length || 0), 0),
+    icon: Server,
+    color: "text-emerald-400",
+  },
+  {
+    label: "System Health",
+    value: "99.9%",
+    icon: Activity,
+    color: "text-blue-400",
+  },
+]);
 </script>
 
 <template>
   <div class="space-y-12 pb-20">
     <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <header class="flex flex-col md:flex-row md:items-end justify-between gap-6">
       <div class="space-y-1">
-        <h1 class="text-4xl font-extrabold tracking-tighter text-on-surface font-headline">
+        <h1 class="text-5xl font-extrabold tracking-tighter font-headline text-white">
           Agency Command
         </h1>
-        <p class="text-on-surface/40 font-medium">
-          Manage infrastructure and automation for your clients.
+        <p class="text-on-surface/40 font-medium tracking-tight">
+          Enterprise infrastructure oversight & n8n orchestration.
         </p>
       </div>
+      <div class="flex items-center gap-3">
+        <div class="relative hidden sm:block">
+          <Search class="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-on-surface/20" />
+          <input
+            v-model="searchQuery"
+            class="bg-surface-container border border-outline-variant/30 rounded-full pl-11 pr-6 py-2.5 text-xs focus:ring-2 focus:ring-primary focus:outline-none transition-all w-64"
+            placeholder="Filter workspaces..."
+          />
+        </div>
+        <Button @click="showAddClientModal = true" size="md">
+          <Plus class="size-4 mr-2" />
+          Provision New Client
+        </Button>
+      </div>
+    </header>
 
-      <Button @click="showAddClientModal = true" size="md">
-        <Plus class="size-4 mr-2" />
-        Add Client
-      </Button>
-    </div>
-
-    <!-- Summary Stats Grid -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Stats Grid -->
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <StatCard
-        label="Active Servers"
-        :value="activeServersCount"
-        :icon="Server"
-        subtext="All systems stable"
-        trend="stable"
-      />
-      <StatCard
-        label="Total Workflows"
-        :value="totalWorkflowsCount"
-        :icon="Activity"
-        subtext="+0 since yesterday"
-      />
-      <StatCard
-        label="In Provisioning"
-        :value="provisioningServersCount"
-        :icon="RefreshCcw"
-        :subtext="provisioningServersCount > 0 ? 'Deploying now' : 'Queue Empty'"
+        v-for="stat in stats"
+        :key="stat.label"
+        :label="stat.label"
+        :value="stat.value"
+        :icon="stat.icon"
+        :class="stat.color"
       />
     </section>
 
-    <!-- Main Listing Area -->
+    <!-- Workspace List -->
     <section class="space-y-6">
-      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 gap-4">
-        <div class="flex items-center gap-4">
-          <h3 class="text-xl font-bold font-headline">Client Environments</h3>
-          <span
-            class="px-2 py-0.5 bg-surface-container-highest text-[10px] font-bold rounded text-on-surface/60"
-          >
-            {{ filteredWorkspaces.length }} Total
-          </span>
-        </div>
-        <div class="relative w-full sm:w-auto">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-on-surface/30" />
-          <input
-            v-model="searchQuery"
-            class="bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-2.5 text-xs focus:ring-1 focus:ring-primary focus:border-primary w-full sm:w-80 text-on-surface placeholder-on-surface/30 outline-none"
-            placeholder="Search clients or instances..."
-            type="text"
-          />
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 class="size-8 animate-spin text-primary" />
-        <p class="text-on-surface/40 font-bold uppercase tracking-widest text-[10px]">
-          Syncing infrastructure...
+      <div v-if="loading" class="flex flex-col items-center justify-center py-24 gap-4">
+        <Loader2 class="size-10 animate-spin text-primary opacity-20" />
+        <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-on-surface/20">
+          Synchronizing Neural State...
         </p>
       </div>
 
-      <!-- Empty State -->
       <div
-        v-else-if="workspaces.length === 0"
-        class="text-center py-20 bg-surface-container-low rounded-2xl border border-dashed border-outline-variant"
+        v-else-if="filteredWorkspaces.length === 0"
+        class="text-center py-24 glass-panel rounded-3xl border-dashed flex flex-col items-center"
       >
-        <div
-          class="bg-primary/10 size-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/20"
-        >
-          <Database class="size-8 text-primary" />
+        <div class="bg-white/5 p-6 rounded-full mb-6">
+          <Database class="size-12 text-on-surface/10" />
         </div>
-        <h3 class="text-xl font-bold text-on-surface font-headline">No Client Workspaces</h3>
+        <h3 class="text-xl font-bold text-white">No Infrastructure Found</h3>
         <p class="text-on-surface/40 mt-2 max-w-xs mx-auto text-sm">
-          Create your first client workspace to start deploying automation servers.
+          Initialize your first client workspace to begin provisioning automated instances.
         </p>
+        <Button @click="showAddClientModal = true" variant="outline" class="mt-8" size="lg">
+          <Plus class="size-4 mr-2" />
+          Create First Workspace
+        </Button>
       </div>
 
-      <!-- Client Grid -->
-      <div v-else class="grid grid-cols-1 gap-6">
-        <div
-          v-for="ws in filteredWorkspaces"
-          :key="ws.id"
-          class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden group hover:border-primary/40 transition-all"
-        >
-          <!-- Card Header -->
-          <div
-            class="p-6 border-b border-outline-variant flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-          >
+      <div
+        v-for="ws in filteredWorkspaces"
+        :key="ws.id"
+        class="group bg-surface-container-low border border-outline-variant/20 rounded-3xl overflow-hidden hover:border-primary/20 transition-all duration-500"
+      >
+        <!-- Card Header -->
+        <div class="px-8 py-6 bg-white/[0.02] border-b border-outline-variant/10">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-4">
               <div
-                class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center border border-outline"
+                class="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform duration-500"
               >
-                <Database class="size-6 text-on-surface/40" />
+                <Database class="size-6 text-primary" />
               </div>
-              <div>
-                <div class="flex items-center gap-2 min-h-8">
-                  <div v-if="editingWorkspaceId === ws.id" class="flex items-center gap-2 flex-1">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <div v-if="editingWorkspaceId === ws.id" class="flex items-center gap-2">
                     <input
                       v-model="editNameValue"
-                      class="bg-black/40 border border-primary/50 rounded px-2 py-0 text-lg font-bold text-white w-full h-8 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      class="bg-black/40 border border-primary/50 rounded-full px-3 py-1 text-lg font-bold text-white w-full h-9 focus:outline-none focus:ring-1 focus:ring-primary/50"
                       @keyup.enter="saveWorkspaceName"
                       @keyup.esc="editingWorkspaceId = null"
                       v-focus
                     />
                     <div class="flex gap-1 shrink-0">
-                      <button
+                      <Button
                         @click="saveWorkspaceName"
-                        class="text-emerald-400 hover:text-emerald-300 transition-colors p-1.5 bg-emerald-500/10 rounded-full"
+                        variant="secondary"
+                        size="sm"
+                        class="h-9 w-9 !p-0 !bg-emerald-500/10 !border-emerald-500/20 text-emerald-400"
                       >
                         <Check class="size-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         @click="editingWorkspaceId = null"
-                        class="text-on-surface/40 hover:text-on-surface transition-colors p-1.5 bg-white/5 rounded-full"
+                        variant="ghost"
+                        size="sm"
+                        class="h-9 w-9 !p-0"
                       >
                         <X class="size-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                   <template v-else>
                     <h4 class="text-lg font-bold font-headline text-on-surface leading-8">
                       {{ ws.name }}
                     </h4>
-                    <button
+                    <Button
                       @click="startEditing(ws)"
-                      class="p-1.5 hover:bg-surface-container-highest rounded-full text-on-surface/40 hover:text-primary transition-colors"
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 !p-0"
                     >
                       <Pencil class="size-4" />
-                    </button>
+                    </Button>
                   </template>
                 </div>
                 <p class="text-[10px] text-on-surface/40 uppercase tracking-widest font-bold">
@@ -519,214 +501,248 @@ const vFocus = {
                   </div>
                 </div>
               </template>
-              <button
+              <Button
                 @click="deleteWorkspace(ws.id)"
-                class="p-2 hover:bg-rose-500/10 rounded-full text-on-surface/20 hover:text-rose-500 transition-colors ml-auto sm:ml-0"
+                variant="danger"
+                size="sm"
+                class="h-9 w-9 !p-0"
               >
                 <Trash2 class="size-4" />
-              </button>
+              </Button>
             </div>
           </div>
+        </div>
 
-          <!-- Card Content -->
-          <div class="p-6 flex flex-col md:flex-row gap-8">
-            <div class="flex-1 space-y-4">
-              <template v-if="ws.servers?.[0]">
-                <div>
-                  <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
-                    >Endpoint URL</label
+        <!-- Card Content -->
+        <div class="p-8 flex flex-col md:flex-row gap-12">
+          <div class="flex-1 space-y-6">
+            <template v-if="ws.servers?.[0]">
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-[0.2em]"
+                  >Endpoint URL</label
+                >
+                <div class="flex items-center gap-3">
+                  <code
+                    class="text-xs text-primary font-mono bg-black/40 px-4 py-2 rounded-full border border-primary/10 block w-fit"
+                    >{{ ws.servers[0].url }}</code
                   >
-                  <div class="flex items-center gap-2 mt-1">
-                    <code
-                      class="text-xs text-primary font-mono bg-primary/5 px-3 py-1.5 rounded border border-primary/10"
-                      >{{ ws.servers[0].url }}</code
+                  <div class="flex items-center gap-1">
+                    <Button
+                      @click="copyToClipboard(ws.servers[0].url)"
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 !p-0"
                     >
-                    <a
+                      <Copy class="size-3.5" />
+                    </Button>
+                    <Button
                       :href="ws.servers[0].url"
                       target="_blank"
-                      class="text-on-surface/40 hover:text-on-surface"
-                      ><ExternalLink class="size-4"
-                    /></a>
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 !p-0"
+                    >
+                      <ExternalLink class="size-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <div class="flex gap-8">
-                  <div>
-                    <label
-                      class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
-                      >Version</label
+              </div>
+              <div class="flex gap-12">
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-[0.2em]"
+                    >Version</label
+                  >
+                  <div class="flex items-center gap-2">
+                    <p class="text-xs font-bold text-white">1.24.1</p>
+                    <span
+                      class="text-[8px] bg-white/5 px-1.5 py-0.5 rounded uppercase font-bold text-on-surface/40"
+                      >Stable</span
                     >
-                    <p class="text-xs mt-0.5 font-medium">1.24.1 (Stable)</p>
                   </div>
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-[0.2em]"
+                    >API Gateway</label
+                  >
                   <div>
-                    <label
-                      class="text-[10px] font-bold text-on-surface/40 uppercase tracking-tighter"
-                      >API Status</label
-                    >
-                    <button
+                    <Button
                       @click="openSettingsModal(ws.servers[0])"
+                      variant="ghost"
+                      size="sm"
                       :class="
                         cn(
-                          'flex items-center gap-1.5 text-xs mt-0.5 font-bold transition-all',
+                          '!h-6 !px-2 !text-[10px] !rounded-md !font-bold',
                           ws.servers[0].n8nApiKey
-                            ? 'text-primary hover:underline'
-                            : 'text-amber-500 hover:text-amber-400 animate-pulse',
+                            ? 'text-primary'
+                            : 'text-amber-500 animate-pulse bg-amber-500/10',
                         )
                       "
                     >
-                      <Key class="size-3" />
-                      {{
-                        ws.servers[0].n8nApiKey ? "Configured" : "Action Required: Missing API Key"
-                      }}
-                    </button>
+                      <Key class="size-3 mr-1.5" />
+                      {{ ws.servers[0].n8nApiKey ? "LINKED" : "KEY REQUIRED" }}
+                    </Button>
                     <p
                       v-if="bootingServers.has(ws.servers[0].id)"
-                      class="text-[10px] text-blue-400 font-medium mt-1 animate-pulse"
+                      class="text-[9px] text-blue-400 font-bold mt-1.5 animate-pulse uppercase tracking-wider"
                     >
-                      Initializing services... (est. 2m)
+                      Initializing services...
                     </p>
                   </div>
                 </div>
-              </template>
-              <div
-                v-else-if="provisioningWorkspaceId === ws.id"
-                class="flex items-center gap-3 py-4 text-primary"
-              >
-                <Loader2 class="size-5 animate-spin" />
-                <span class="text-xs font-bold uppercase tracking-widest"
-                  >Initialising CubePath Provisioning...</span
-                >
               </div>
-              <div v-else class="py-4">
-                <Button @click="provisionServer(ws.name, ws.id)" variant="outline" size="md">
-                  <Server class="size-4 mr-2" />
-                  Provision CubePath Instance
-                </Button>
-              </div>
-            </div>
-
-            <!-- Server Actions Grid -->
+            </template>
             <div
-              v-if="ws.servers?.[0]"
-              class="grid grid-cols-2 gap-2 border-t md:border-t-0 md:border-l border-outline-variant pt-6 md:pt-0 md:pl-8 w-full md:w-70 shrink-0"
+              v-else-if="provisioningWorkspaceId === ws.id"
+              class="flex flex-col items-center justify-center py-10 bg-white/[0.02] rounded-3xl border border-dashed border-primary/20 gap-4"
             >
-              <button
-                v-if="ws.servers[0].status === 'stopped'"
-                @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-emerald-500/10 border border-outline-variant hover:border-emerald-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
+              <div class="relative">
+                <div
+                  class="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"
+                ></div>
+                <Loader2 class="size-8 animate-spin text-primary relative z-10" />
+              </div>
+              <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary"
+                >Initializing CubePath Node...</span
               >
-                <Play class="size-3.5 text-emerald-500" />
-                <span class="truncate">Resume</span>
-              </button>
-              <button
-                v-if="ws.servers[0].status === 'active'"
-                @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-white/5 border border-outline-variant rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
-              >
-                <Square class="size-3.5 text-on-surface/40" />
-                <span class="truncate">Stop</span>
-              </button>
-              <button
-                @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-amber-500/10 border border-outline-variant hover:border-amber-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
-              >
-                <RotateCw class="size-3.5 text-amber-500" />
-                <span class="truncate">Restart</span>
-              </button>
-              <button
-                @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-blue-500/10 border border-outline-variant hover:border-blue-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
-              >
-                <RefreshCcw class="size-3.5 text-blue-500" />
-                <span class="truncate">Reinstall</span>
-              </button>
-              <button
-                @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
-                class="flex items-center justify-center gap-2 px-3 py-2.5 bg-surface-container hover:bg-rose-500/10 hover:border-rose-500/40 border border-outline-variant rounded-full text-[10px] font-bold uppercase tracking-wider transition-all text-on-surface/60 hover:text-rose-500"
-              >
-                <Trash2 class="size-3.5" />
-                <span class="truncate">Delete</span>
-              </button>
             </div>
+            <div v-else class="py-6">
+              <Button @click="provisionServer(ws.name, ws.id)" variant="outline" size="md">
+                <Server class="size-4 mr-2" />
+                Provision CubePath Instance
+              </Button>
+            </div>
+          </div>
+
+          <!-- Server Actions Grid -->
+          <div
+            v-if="ws.servers?.[0]"
+            class="grid grid-cols-2 gap-2 border-t md:border-t-0 md:border-l border-outline-variant/10 pt-8 md:pt-0 md:pl-12 w-full md:w-80 shrink-0"
+          >
+            <Button
+              v-if="ws.servers[0].status === 'stopped'"
+              @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
+              variant="secondary"
+              class="!px-3 !py-2.5 text-[10px] !bg-emerald-500/10 !border-emerald-500/20 text-emerald-400 hover:!bg-emerald-500/20"
+            >
+              <Play class="size-3.5 mr-2" />
+              <span class="truncate">Resume</span>
+            </Button>
+            <Button
+              v-if="ws.servers[0].status === 'active'"
+              @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
+              variant="secondary"
+              class="!px-3 !py-2.5 text-[10px]"
+            >
+              <Square class="size-3.5 text-on-surface/40 mr-2" />
+              <span class="truncate">Stop</span>
+            </Button>
+            <Button
+              @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
+              variant="secondary"
+              class="!px-3 !py-2.5 text-[10px] !bg-amber-500/10 !border-amber-500/20 text-amber-400 hover:!bg-amber-500/20"
+            >
+              <RotateCw class="size-3.5 mr-2" />
+              <span class="truncate">Restart</span>
+            </Button>
+            <Button
+              @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
+              variant="outline"
+              class="!px-3 !py-2.5 text-[10px] !border-blue-500/30 text-blue-400 hover:!bg-blue-500/5"
+            >
+              <RefreshCcw class="size-3.5 mr-2" />
+              <span class="truncate">Reinstall</span>
+            </Button>
+            <Button
+              @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
+              variant="danger"
+              class="!px-3 !py-2.5 text-[10px]"
+            >
+              <Trash2 class="size-3.5 mr-2" />
+              <span class="truncate">Delete</span>
+            </Button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Modals Implementation -->
-
-    <!-- Add Client Modal -->
+    <!-- Modals Section -->
     <Modal
       :show="showAddClientModal"
-      title="Provision New Client"
+      title="New Client Workspace"
       @close="showAddClientModal = false"
     >
-      <form class="space-y-6" @submit.prevent="createWorkspace">
-        <div class="col-span-2">
-          <label
-            class="block text-[10px] font-bold text-on-surface/40 uppercase tracking-widest mb-2"
-            >Client Company Name</label
+      <form @submit.prevent="createWorkspace" class="space-y-6">
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-widest"
+            >Workspace Name</label
           >
           <input
             v-model="newWorkspaceName"
-            class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none"
-            placeholder="e.g. Acme Corp"
-            type="text"
-            required
+            v-focus
+            class="w-full bg-black/40 border border-outline-variant rounded-full px-6 py-4 outline-none focus:border-primary transition-all font-medium"
+            placeholder="e.g. Acme Corp Automation"
           />
         </div>
-        <div class="pt-4">
-          <Button type="submit" :disabled="creating || !newWorkspaceName" class="w-full" size="lg">
+        <div class="flex gap-3">
+          <Button type="button" @click="showAddClientModal = false" variant="ghost" class="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" :disabled="creating || !newWorkspaceName" class="flex-1" size="lg">
             <Loader2 v-if="creating" class="size-4 animate-spin mr-2" />
-            Initialize Workspace
+            Create Workspace
           </Button>
         </div>
       </form>
     </Modal>
 
-    <!-- One-Time Password Display Modal -->
+    <!-- Provisioning Modal -->
     <Modal
       :show="showProvisionModal"
-      title="VPS Security Credentials"
+      title="Server Provisioning Started"
       @close="showProvisionModal = false"
     >
       <div class="space-y-6">
-        <div class="flex flex-col items-center text-center space-y-2">
-          <div class="bg-primary/20 p-3 rounded-full mb-2">
-            <ShieldAlert class="size-8 text-primary" />
-          </div>
-          <p class="text-on-surface/60 text-sm">
-            This is the **ONLY TIME** you will see your root password. Please store it securely.
+        <div class="bg-primary/10 border border-primary/20 rounded-3xl p-8 text-center">
+          <ShieldAlert class="size-12 text-primary mx-auto mb-4" />
+          <h4 class="text-xl font-bold text-white mb-2">Save your Root Password!</h4>
+          <p class="text-xs text-on-surface/60 leading-relaxed">
+            This is the **only time** you will see the plain text password. We store only a secure
+            one-way hash. You need this for critical actions like Reinstall, Restart, and Delete.
           </p>
         </div>
 
-        <div class="bg-black/40 border border-white/10 rounded-xl p-4 space-y-2">
-          <label class="text-[10px] uppercase tracking-widest text-on-surface/40 font-bold"
+        <div
+          class="bg-black/40 border border-white/10 rounded-full p-2 pl-6 flex items-center gap-2"
+        >
+          <label class="text-[10px] uppercase tracking-widest text-on-surface/40 font-bold shrink-0"
             >Root Password</label
           >
-          <div class="flex items-center gap-2">
-            <input
-              :type="passwordVisible ? 'text' : 'password'"
-              :value="generatedPassword"
-              readonly
-              class="flex-1 bg-transparent border-none text-xl font-mono text-primary focus:ring-0"
-            />
-            <button
-              @click="passwordVisible = !passwordVisible"
-              class="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            >
-              <component :is="passwordVisible ? EyeOff : Eye" class="size-4" />
-            </button>
-            <button
-              @click="copyToClipboard(generatedPassword)"
-              class="p-2 hover:bg-white/5 rounded-lg transition-colors text-primary"
-            >
-              <Copy class="size-4" />
-            </button>
-          </div>
+          <input
+            :type="passwordVisible ? 'text' : 'password'"
+            :value="generatedPassword"
+            readonly
+            class="flex-1 bg-transparent border-none text-lg font-mono text-primary focus:ring-0 text-center"
+          />
+          <Button
+            @click="passwordVisible = !passwordVisible"
+            variant="ghost"
+            size="icon"
+            class="h-10 w-10"
+          >
+            <component :is="passwordVisible ? EyeOff : Eye" class="size-4" />
+          </Button>
+          <Button
+            @click="copyToClipboard(generatedPassword)"
+            variant="ghost"
+            size="icon"
+            class="h-10 w-10 text-primary"
+          >
+            <Copy class="size-4" />
+          </Button>
         </div>
 
         <div class="space-y-4">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 px-4">
             <input
               type="checkbox"
               id="confirm-pwd"
@@ -765,20 +781,18 @@ const vFocus = {
             v-model="actionPassword"
             type="password"
             placeholder="Root Password"
-            class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+            class="w-full bg-black/20 border border-white/10 rounded-full px-6 py-3 text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
             @keyup.enter="executeAction"
           />
-          <p v-if="actionError" class="text-[10px] text-error font-bold uppercase tracking-wide">
+          <p
+            v-if="actionError"
+            class="text-[10px] text-rose-500 font-bold uppercase tracking-wide px-2"
+          >
             {{ actionError }}
           </p>
         </div>
         <div class="flex gap-2">
-          <button
-            @click="showActionModal = false"
-            class="flex-1 bg-white/5 hover:bg-white/10 text-on-surface text-sm py-2.5 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
+          <Button @click="showActionModal = false" variant="ghost" class="flex-1"> Cancel </Button>
           <Button
             @click="executeAction"
             :disabled="actionLoading || !actionPassword"
@@ -826,19 +840,16 @@ const vFocus = {
           <div class="relative group">
             <input
               v-model="n8nApiKey"
-              class="w-full bg-black/40 border border-outline-variant rounded-lg px-4 py-3 font-mono text-sm tracking-widest outline-none"
+              class="w-full bg-black/40 border border-outline-variant rounded-full px-6 py-4 font-mono text-sm tracking-widest outline-none focus:border-primary transition-all"
               type="password"
               placeholder="fluvia_n8n_..."
             />
           </div>
         </div>
         <div class="flex gap-3 pt-2">
-          <button
-            @click="showSettingsModal = false"
-            class="flex-1 bg-surface-container-highest hover:bg-surface-container-highest/80 text-xs font-bold py-3 rounded-lg border border-outline-variant transition-all"
-          >
+          <Button @click="showSettingsModal = false" variant="ghost" class="flex-1">
             Cancel
-          </button>
+          </Button>
           <Button
             @click="saveServerSettings"
             :disabled="savingSettings || !n8nApiKey"

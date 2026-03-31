@@ -16,6 +16,7 @@ import {
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import JsonViewer from "@/components/ui/JsonViewer.vue";
+import Button from "@/components/ui/Button.vue";
 
 const props = defineProps<{
   initialWorkflowId?: string;
@@ -175,15 +176,17 @@ onMounted(fetchInitialData);
           class="bg-transparent border-none text-right font-bold text-white focus:ring-0 placeholder:text-white/20"
           placeholder="Workflow Name..."
         />
-        <button
+        <Button
           @click="saveBlueprint"
           :disabled="!generatedJson || isSaving"
-          class="bg-surface-elevated border border-border px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 hover:bg-surface-highest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
+          size="sm"
+          class="px-4 py-2"
         >
-          <Loader2 v-if="isSaving" class="size-4 animate-spin" />
-          <Save v-else class="size-4" />
+          <Loader2 v-if="isSaving" class="size-4 animate-spin mr-2" />
+          <Save v-else class="size-4 mr-2" />
           {{ savedWorkflowId ? "Update Blueprint" : "Save Blueprint" }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -194,7 +197,7 @@ onMounted(fetchInitialData);
           class="flex-1 bg-surface-elevated border border-border rounded-2xl p-6 flex flex-col gap-6"
         >
           <div class="space-y-2">
-            <div class="bg-primary/10 w-fit p-2 rounded-lg">
+            <div class="bg-primary/10 w-fit p-2 rounded-full">
               <Sparkles class="size-5 text-primary" />
             </div>
             <h2 class="text-2xl font-bold text-white tracking-tight">AI Workflow Agent</h2>
@@ -207,18 +210,19 @@ onMounted(fetchInitialData);
             <textarea
               v-model="prompt"
               placeholder="e.g. When a new row is added to Google Sheets, send a Slack message..."
-              class="flex-1 bg-black/20 border border-white/10 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none placeholder:text-muted-foreground/50 transition-all"
+              class="flex-1 bg-black/20 border border-white/10 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-primary focus:outline-none resize-none placeholder:text-muted-foreground/50 transition-all"
             ></textarea>
 
-            <button
+            <Button
               @click="generateWorkflow"
               :disabled="isGenerating || !prompt"
-              class="bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-on-primary w-full py-4 rounded-full font-bold flex items-center justify-center gap-2 transition-all shadow-xl shadow-primary/20"
+              size="lg"
+              class="w-full"
             >
-              <Loader2 v-if="isGenerating" class="size-5 animate-spin" />
-              <Sparkles v-else class="size-5" />
+              <Loader2 v-if="isGenerating" class="size-5 animate-spin mr-2" />
+              <Sparkles v-else class="size-5 mr-2" />
               {{ isGenerating ? "Agent is working..." : "Generate Blueprint" }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -236,12 +240,14 @@ onMounted(fetchInitialData);
               <span class="text-xs font-mono text-muted-foreground">n8n_blueprint.json</span>
             </div>
             <div v-if="generatedJson" class="flex items-center gap-2">
-              <button
+              <Button
                 @click="generateWorkflow"
-                class="text-[10px] uppercase font-bold text-muted-foreground hover:text-white transition-colors flex items-center gap-1"
+                variant="ghost"
+                size="sm"
+                class="h-7 text-[10px] !px-2"
               >
-                <RefreshCcw class="size-3" /> Regenerate
-              </button>
+                <RefreshCcw class="size-3 mr-1" /> Regenerate
+              </Button>
             </div>
           </div>
 
@@ -289,13 +295,15 @@ onMounted(fetchInitialData);
                 >Deployment Target</span
               >
               <div v-if="!deploySuccess" class="relative">
-                <button
+                <Button
                   @click="showDeployMenu = !showDeployMenu"
-                  class="flex items-center gap-2 text-sm font-medium text-white/80 hover:text-white bg-white/5 px-3 py-1.5 rounded-full border border-white/10 mt-1"
+                  variant="secondary"
+                  size="sm"
+                  class="mt-1 h-8"
                 >
                   {{ selectedServerUrl || "Select Target Server" }}
-                  <ChevronDown class="size-4" />
-                </button>
+                  <ChevronDown class="size-4 ml-2" />
+                </Button>
 
                 <!-- Simple Dropdown -->
                 <div
@@ -306,14 +314,16 @@ onMounted(fetchInitialData);
                     <span class="text-[10px] uppercase font-bold text-on-surface/40 px-2">{{
                       ws.name
                     }}</span>
-                    <button
+                    <Button
                       v-for="srv in ws.servers"
                       :key="srv.id"
                       @click="
                         selectedServerId = srv.id;
                         showDeployMenu = false;
                       "
-                      class="w-full text-left p-2 hover:bg-white/5 rounded-full text-xs flex items-center justify-between"
+                      variant="ghost"
+                      size="sm"
+                      class="w-full !justify-between !px-2 !h-9"
                     >
                       <div class="flex items-center gap-2 overflow-hidden">
                         <span
@@ -337,7 +347,7 @@ onMounted(fetchInitialData);
                         v-if="selectedServerId === srv.id"
                         class="size-1.5 rounded-full bg-primary shrink-0 mr-1"
                       ></div>
-                    </button>
+                    </Button>
                   </div>
                   <div v-if="workspaces.length === 0" class="p-4 text-center">
                     <p class="text-[10px] text-muted-foreground mb-2">No servers found</p>
@@ -354,16 +364,18 @@ onMounted(fetchInitialData);
               >
             </div>
 
-            <button
+            <Button
               v-if="generatedJson && !deploySuccess"
               @click="deployToSelectedServer"
               :disabled="!selectedServerId || isDeploying"
-              class="bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-on-primary px-6 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20"
+              variant="primary"
+              size="md"
+              class="px-6"
             >
-              <Loader2 v-if="isDeploying" class="size-4 animate-spin" />
-              <CloudUpload v-else class="size-4" />
+              <Loader2 v-if="isDeploying" class="size-4 animate-spin mr-2" />
+              <CloudUpload v-else class="size-4 mr-2" />
               Deploy to Server
-            </button>
+            </Button>
             <div v-else-if="deploySuccess" class="flex items-center gap-2 text-emerald-400">
               <CheckCircle2 class="size-5" />
               <span class="text-sm font-bold">Live</span>

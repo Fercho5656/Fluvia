@@ -2,7 +2,8 @@
 import { ref } from "vue";
 import JsonViewer from "@/components/ui/JsonViewer.vue";
 import workflowJson from "@/data/workflow-showcase.json";
-import { Cpu, Loader2 } from "lucide-vue-next";
+import { Cpu, Loader2, RotateCcw } from "lucide-vue-next";
+import Button from "@/components/ui/Button.vue";
 
 const isGenerating = ref(false);
 const showJson = ref(false);
@@ -27,16 +28,13 @@ const startGeneration = () => {
       v-if="!hasStarted"
       class="h-full flex flex-col items-center justify-center text-center p-4"
     >
-      <button
-        @click="startGeneration"
-        class="mt-auto group relative px-6 py-3 bg-primary-container text-white rounded-xl font-bold uppercase tracking-widest text-xs transition-all hover:bg-inverse-primary hover:-translate-y-0.5 active:scale-95 shadow-xl shadow-primary-container/20"
-      >
-        <div class="flex items-center gap-3">
-          <Cpu class="size-4 group-hover:rotate-12 transition-transform" />
-          <span>Generate Blueprint</span>
-        </div>
-      </button>
-      <p class="mt-4 text-[10px] uppercase tracking-[0.2em]">Click to see the AI in action</p>
+      <Button @click="startGeneration" variant="primary" size="lg" class="mt-auto group">
+        <Cpu class="size-4 mr-3 group-hover:rotate-12 transition-transform" />
+        Generate Blueprint
+      </Button>
+      <p class="mt-4 text-[10px] uppercase tracking-[0.2em] text-on-surface/40">
+        Click to see the AI in action
+      </p>
       <small class="mt-auto text-on-surface-variant tracking-[0.2em] opacity-50">
         *This is a demo showcasing the potential of AI-generated n8n workflows. No real AI is being
         called.
@@ -81,15 +79,18 @@ const startGeneration = () => {
           <span class="text-[10px] font-bold uppercase tracking-widest text-primary/60"
             >Blueprint Generated</span
           >
-          <button
+          <Button
             @click="
               hasStarted = false;
               showJson = false;
             "
-            class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface transition-colors"
+            variant="ghost"
+            size="sm"
+            class="h-7 px-2!"
           >
+            <RotateCcw class="size-3 mr-1" />
             Reset
-          </button>
+          </Button>
         </div>
         <JsonViewer :data="workflowJson" class="bg-transparent border-none p-0 flex-1 min-h-0" />
       </div>

@@ -2,6 +2,7 @@
 import { X } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import { ref, onMounted } from "vue";
+import Button from "@/components/ui/Button.vue";
 
 defineProps<{
   show: boolean;
@@ -18,35 +19,34 @@ onMounted(() => {
 </script>
 
 <template>
-  <Teleport to="body" v-if="isMounted">
-    <Transition name="modal">
-      <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="$emit('close')"></div>
+  <div>
+    <Teleport to="body" v-if="isMounted">
+      <Transition name="modal">
+        <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <!-- Backdrop -->
+          <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="$emit('close')"></div>
 
-        <!-- Content -->
-        <div
-          :class="
-            cn(
-              'relative w-full bg-surface-container rounded-2xl border border-outline p-8 shadow-2xl modal-content',
-              maxWidth || 'max-w-xl',
-            )
-          "
-        >
-          <div class="flex justify-between items-center mb-8">
-            <h3 class="text-2xl font-bold font-headline">{{ title }}</h3>
-            <button
-              @click="$emit('close')"
-              class="p-2 hover:bg-surface-container-highest rounded-full transition-colors text-on-surface/40"
-            >
-              <X class="size-5" />
-            </button>
+          <!-- Content -->
+          <div
+            :class="
+              cn(
+                'relative w-full bg-surface-container rounded-2xl border border-outline p-8 shadow-2xl modal-content',
+                maxWidth || 'max-w-xl',
+              )
+            "
+          >
+            <div class="flex justify-between items-center mb-8">
+              <h3 class="text-2xl font-bold font-headline">{{ title }}</h3>
+              <Button @click="$emit('close')" variant="ghost" size="icon" class="-mr-2">
+                <X class="size-5" />
+              </Button>
+            </div>
+            <slot />
           </div>
-          <slot />
         </div>
-      </div>
-    </Transition>
-  </Teleport>
+      </Transition>
+    </Teleport>
+  </div>
 </template>
 
 <style scoped>
