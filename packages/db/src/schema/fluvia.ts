@@ -12,6 +12,7 @@ export const serverStatusEnum = pgEnum("server_status", [
   "resuming",
   "restarting",
 ]);
+export const serverTypeEnum = pgEnum("server_type", ["managed", "external"]);
 export const workflowStatusEnum = pgEnum("workflow_status", ["draft", "active", "error"]);
 
 /**
@@ -62,7 +63,7 @@ export const server = pgTable(
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").references(() => workspace.id, { onDelete: "cascade" }),
     cubePathId: text("cube_path_id"),
-    // Mocked ID from CubePath
+    type: serverTypeEnum("type").default("managed").notNull(),
     status: serverStatusEnum("status").default("deploying").notNull(),
     url: text("url"),
     passwordHash: text("password_hash"),

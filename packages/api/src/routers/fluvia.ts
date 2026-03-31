@@ -50,7 +50,8 @@ export const fluviaRouter = {
             if (ws.servers && shouldSync) {
               ws.servers = await Promise.all(
                 ws.servers.map(async (srv) => {
-                  if (!srv.cubePathId || srv.status === "deleting") return srv;
+                  if (srv.type !== "managed" || !srv.cubePathId || srv.status === "deleting")
+                    return srv;
 
                   const srvCreated = srv.createdAt?.getTime() || 0;
                   const isVeryNew = srvCreated && Date.now() - srvCreated < 30000;
@@ -203,6 +204,7 @@ export const fluviaRouter = {
             id,
             workspaceId: input.workspaceId,
             cubePathId,
+            type: "managed",
             status: "deploying",
             passwordHash: passwordHash,
             url: `https://vps${cubePathId}.cubepath.net`,
@@ -216,6 +218,52 @@ export const fluviaRouter = {
             cause: e,
           });
         }
+      }),
+
+    linkExternal: protectedProcedure
+      .input(
+        z.object({
+          workspaceId: z.string(),
+          url: z.string().min(1),
+          n8nApiKey: z.string().min(1),
+        }),
+      )
+      .handler(async ({ input, context }) => {
+        // 1. Preprocess URL
+        let finalUrl = input.url.trim().replace(/\/$/, "");
+        if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+          finalUrl = `https://${finalUrl}`;
+        }
+
+        // 2. Verify ownership of workspace
+        const ws = await db.query.workspace.findFirst({
+          where: and(
+            eq(workspace.id, input.workspaceId),
+            eq(workspace.agencyId, context.session.user.id),
+          ),
+        });
+        if (!ws) throw new ORPCError("NOT_FOUND", { message: "Workspace not found" });
+
+        // 3. Validate n8n connection
+        const isValid = await N8NService.validateKey(finalUrl, input.n8nApiKey);
+        if (!isValid) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Could not connect to n8n instance. Please check your URL and API Key.",
+          });
+        }
+
+        // 4. Create record
+        const id = randomUUID();
+        await db.insert(server).values({
+          id,
+          workspaceId: input.workspaceId,
+          type: "external",
+          status: "active",
+          url: finalUrl,
+          n8nApiKey: input.n8nApiKey,
+        });
+
+        return { id };
       }),
 
     stop: protectedProcedure

@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Search,
   Key,
+  Sparkles,
 } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 import StatCard from "@/components/ui/StatCard.vue";
@@ -52,12 +53,18 @@ const showAddClientModal = ref(false);
 const showProvisionModal = ref(false);
 const showActionModal = ref(false);
 const showSettingsModal = ref(false);
+const showExternalModal = ref(false);
 
 // Data for modals
 const generatedPassword = ref("");
 const passwordVisible = ref(false);
 const passwordConfirmed = ref(false);
 const provisioningWorkspaceId = ref<string | null>(null);
+
+const externalUrl = ref("");
+const externalApiKey = ref("");
+const linkingWorkspaceId = ref<string | null>(null);
+const linkingLoading = ref(false);
 
 const actionPassword = ref("");
 const currentAction = ref<{ type: string; id: string; label: string } | null>(null);
@@ -193,6 +200,33 @@ async function provisionServer(workspaceName: string, workspaceId: string) {
     toastStore.error(error.message || "Failed to provision server.");
   } finally {
     provisioningWorkspaceId.value = null;
+  }
+}
+
+function openExternalModal(workspaceId: string) {
+  linkingWorkspaceId.value = workspaceId;
+  externalUrl.value = "";
+  externalApiKey.value = "";
+  showExternalModal.value = true;
+}
+
+async function linkExternalServer() {
+  if (!linkingWorkspaceId.value || !externalUrl.value || !externalApiKey.value) return;
+  linkingLoading.value = true;
+  try {
+    await orpc.fluvia.server.linkExternal({
+      workspaceId: linkingWorkspaceId.value,
+      url: externalUrl.value,
+      n8nApiKey: externalApiKey.value,
+    });
+    toastStore.info("External n8n instance linked successfully.");
+    showExternalModal.value = false;
+    await fetchWorkspaces();
+  } catch (error: any) {
+    console.error("Failed to link external server:", error);
+    toastStore.error(error.message || "Failed to link server.");
+  } finally {
+    linkingLoading.value = false;
   }
 }
 
@@ -462,7 +496,12 @@ const stats = computed(() => [
                   </template>
                 </div>
                 <p class="text-[10px] text-on-surface/40 uppercase tracking-widest font-bold">
-                  ID: {{ ws.id.slice(0, 8) }} • {{ ws.servers?.[0]?.status || "Idle" }}
+                  ID: {{ ws.id.slice(0, 8) }} •
+                  {{
+                    ws.servers?.[0]?.type === "external"
+                      ? "External"
+                      : ws.servers?.[0]?.status || "Idle"
+                  }}
                 </p>
               </div>
             </div>
@@ -470,35 +509,43 @@ const stats = computed(() => [
             <div class="flex items-center gap-4 w-full sm:w-auto">
               <template v-if="ws.servers?.[0]">
                 <span
-                  v-if="bootingServers.has(ws.servers[0].id)"
-                  class="px-3 py-1 text-[10px] font-bold rounded-full border uppercase bg-blue-500/10 text-blue-500 border-blue-500/20 animate-pulse"
+                  v-if="ws.servers[0].type === 'external'"
+                  class="px-3 py-1 text-[10px] font-bold rounded-full border uppercase bg-purple-500/10 text-purple-400 border-purple-500/20"
                 >
-                  Booting
+                  External
                 </span>
-                <span
-                  v-else
-                  :class="
-                    cn(
-                      'px-3 py-1 text-[10px] font-bold rounded-full border uppercase',
-                      ws.servers[0].status === 'active'
-                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                        : 'bg-orange-500/10 text-orange-500 border-orange-500/20 animate-pulse',
-                    )
-                  "
-                >
-                  {{ ws.servers[0].status }}
-                </span>
-                <div
-                  class="flex items-center gap-1 ml-auto sm:ml-4 border-l border-outline-variant pl-4"
-                >
-                  <span class="text-[10px] font-bold text-on-surface/40 uppercase">CPU</span>
-                  <div class="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
-                    <div
-                      class="bg-primary h-full"
-                      :style="{ width: ws.servers[0].status === 'active' ? '12%' : '0%' }"
-                    ></div>
+                <template v-else>
+                  <span
+                    v-if="bootingServers.has(ws.servers[0].id)"
+                    class="px-3 py-1 text-[10px] font-bold rounded-full border uppercase bg-blue-500/10 text-blue-500 border-blue-500/20 animate-pulse"
+                  >
+                    Booting
+                  </span>
+                  <span
+                    v-else
+                    :class="
+                      cn(
+                        'px-3 py-1 text-[10px] font-bold rounded-full border uppercase',
+                        ws.servers[0].status === 'active'
+                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                          : 'bg-orange-500/10 text-orange-500 border-orange-500/20 animate-pulse',
+                      )
+                    "
+                  >
+                    {{ ws.servers[0].status }}
+                  </span>
+                  <div
+                    class="flex items-center gap-1 ml-auto sm:ml-4 border-l border-outline-variant pl-4"
+                  >
+                    <span class="text-[10px] font-bold text-on-surface/40 uppercase">CPU</span>
+                    <div class="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                      <div
+                        class="bg-primary h-full"
+                        :style="{ width: ws.servers[0].status === 'active' ? '12%' : '0%' }"
+                      ></div>
+                    </div>
                   </div>
-                </div>
+                </template>
               </template>
               <Button
                 v-if="!ws.isPublic"
@@ -615,10 +662,19 @@ const stats = computed(() => [
                 >Initializing CubePath Node...</span
               >
             </div>
-            <div v-else class="py-6">
+            <div v-else class="py-6 flex flex-wrap gap-4">
               <Button @click="provisionServer(ws.name, ws.id)" variant="outline" size="md">
                 <Server class="size-4 mr-2" />
-                Provision CubePath Instance
+                Provision Managed VPS
+              </Button>
+              <Button
+                @click="openExternalModal(ws.id)"
+                variant="ghost"
+                size="md"
+                class="border border-white/5 bg-white/[0.02]"
+              >
+                <ExternalLink class="size-4 mr-2" />
+                Link External Instance
               </Button>
             </div>
           </div>
@@ -628,48 +684,62 @@ const stats = computed(() => [
             v-if="ws.servers?.[0] && !ws.isPublic"
             class="grid grid-cols-2 gap-2 border-t md:border-t-0 md:border-l border-outline-variant/10 pt-8 md:pt-0 md:pl-12 w-full md:w-80 shrink-0"
           >
-            <Button
-              v-if="ws.servers[0].status === 'stopped'"
-              @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
-              variant="secondary"
-              class="!px-3 !py-2.5 text-[10px] !bg-emerald-500/10 !border-emerald-500/20 text-emerald-400 hover:!bg-emerald-500/20"
-            >
-              <Play class="size-3.5 mr-2" />
-              <span class="truncate">Resume</span>
-            </Button>
-            <Button
-              v-if="ws.servers[0].status === 'active'"
-              @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
-              variant="secondary"
-              class="!px-3 !py-2.5 text-[10px]"
-            >
-              <Square class="size-3.5 text-on-surface/40 mr-2" />
-              <span class="truncate">Stop</span>
-            </Button>
-            <Button
-              @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
-              variant="secondary"
-              class="!px-3 !py-2.5 text-[10px] !bg-amber-500/10 !border-amber-500/20 text-amber-400 hover:!bg-amber-500/20"
-            >
-              <RotateCw class="size-3.5 mr-2" />
-              <span class="truncate">Restart</span>
-            </Button>
-            <Button
-              @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
-              variant="outline"
-              class="!px-3 !py-2.5 text-[10px] !border-blue-500/30 text-blue-400 hover:!bg-blue-500/5"
-            >
-              <RefreshCcw class="size-3.5 mr-2" />
-              <span class="truncate">Reinstall</span>
-            </Button>
-            <Button
-              @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
-              variant="danger"
-              class="!px-3 !py-2.5 text-[10px]"
-            >
-              <Trash2 class="size-3.5 mr-2" />
-              <span class="truncate">Delete</span>
-            </Button>
+            <template v-if="ws.servers[0].type === 'managed'">
+              <Button
+                v-if="ws.servers[0].status === 'stopped'"
+                @click="openActionModal('resume', ws.servers[0].id, 'Resume Server')"
+                variant="secondary"
+                class="!px-3 !py-2.5 text-[10px] !bg-emerald-500/10 !border-emerald-500/20 text-emerald-400 hover:!bg-emerald-500/20"
+              >
+                <Play class="size-3.5 mr-2" />
+                <span class="truncate">Resume</span>
+              </Button>
+              <Button
+                v-if="ws.servers[0].status === 'active'"
+                @click="openActionModal('stop', ws.servers[0].id, 'Stop Server')"
+                variant="secondary"
+                class="!px-3 !py-2.5 text-[10px]"
+              >
+                <Square class="size-3.5 text-on-surface/40 mr-2" />
+                <span class="truncate">Stop</span>
+              </Button>
+              <Button
+                @click="openActionModal('restart', ws.servers[0].id, 'Restart')"
+                variant="secondary"
+                class="!px-3 !py-2.5 text-[10px] !bg-amber-500/10 !border-amber-500/20 text-amber-400 hover:!bg-amber-500/20"
+              >
+                <RotateCw class="size-3.5 mr-2" />
+                <span class="truncate">Restart</span>
+              </Button>
+              <Button
+                @click="openActionModal('reinstall', ws.servers[0].id, 'Reinstall')"
+                variant="outline"
+                class="!px-3 !py-2.5 text-[10px] !border-blue-500/30 text-blue-400 hover:!bg-blue-500/5"
+              >
+                <RefreshCcw class="size-3.5 mr-2" />
+                <span class="truncate">Reinstall</span>
+              </Button>
+              <Button
+                @click="openActionModal('delete', ws.servers[0].id, 'Delete Server')"
+                variant="danger"
+                class="!px-3 !py-2.5 text-[10px]"
+              >
+                <Trash2 class="size-3.5 mr-2" />
+                <span class="truncate">Delete</span>
+              </Button>
+            </template>
+            <template v-else>
+              <div
+                class="col-span-2 flex flex-col justify-center items-center gap-2 p-4 bg-white/[0.02] rounded-2xl border border-dashed border-outline-variant/20"
+              >
+                <span class="text-[10px] font-bold text-on-surface/40 uppercase"
+                  >External Instance</span
+                >
+                <Button @click="deleteWorkspace(ws.id)" variant="danger" size="sm" class="w-full">
+                  Unlink Instance
+                </Button>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -896,6 +966,68 @@ const stats = computed(() => [
           >
             <Loader2 v-if="savingSettings" class="size-4 animate-spin mr-2" />
             Save Key
+          </Button>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Link External Instance Modal -->
+    <Modal
+      :show="showExternalModal"
+      title="Link External n8n"
+      maxWidth="max-w-md"
+      @close="showExternalModal = false"
+    >
+      <div class="space-y-6">
+        <div class="text-center">
+          <div
+            class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/20"
+          >
+            <ExternalLink class="size-8 text-primary" />
+          </div>
+          <p class="text-xs text-on-surface/40 leading-relaxed">
+            Connect an existing n8n instance by providing its base URL and Public API Key. Make sure
+            the instance is reachable from our servers.
+          </p>
+        </div>
+
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-widest"
+              >Base URL</label
+            >
+            <input
+              v-model="externalUrl"
+              class="w-full bg-black/40 border border-outline-variant rounded-full px-6 py-4 text-sm focus:border-primary transition-all outline-none"
+              placeholder="https://n8n.your-agency.com"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-[10px] font-bold text-on-surface/40 uppercase tracking-widest"
+              >API Key</label
+            >
+            <input
+              v-model="externalApiKey"
+              class="w-full bg-black/40 border border-outline-variant rounded-full px-6 py-4 font-mono text-sm tracking-widest outline-none focus:border-primary transition-all"
+              type="password"
+              placeholder="fluvia_n8n_..."
+            />
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <Button @click="showExternalModal = false" variant="ghost" class="flex-1">
+            Cancel
+          </Button>
+          <Button
+            @click="linkExternalServer"
+            :disabled="linkingLoading || !externalUrl || !externalApiKey"
+            class="flex-1"
+            variant="primary"
+          >
+            <Loader2 v-if="linkingLoading" class="size-4 animate-spin mr-2" />
+            Link Instance
           </Button>
         </div>
       </div>
