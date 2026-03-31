@@ -70,6 +70,7 @@ export class CubePathService {
     });
 
     const responseText = await response.text();
+    console.log(`[CubePath] Response ${response.status}:`, responseText);
 
     if (!response.ok) {
       let errorMessage = response.statusText;

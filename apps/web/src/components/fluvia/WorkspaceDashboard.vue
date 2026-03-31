@@ -444,7 +444,14 @@ const stats = computed(() => [
                     <h4 class="text-lg font-bold font-headline text-on-surface leading-8">
                       {{ ws.name }}
                     </h4>
+                    <span
+                      v-if="ws.isPublic"
+                      class="px-2 py-0.5 text-[8px] font-bold bg-primary/10 text-primary border border-primary/20 rounded-full uppercase tracking-widest"
+                    >
+                      Public Demo
+                    </span>
                     <Button
+                      v-if="!ws.isPublic"
                       @click="startEditing(ws)"
                       variant="ghost"
                       size="sm"
@@ -494,6 +501,7 @@ const stats = computed(() => [
                 </div>
               </template>
               <Button
+                v-if="!ws.isPublic"
                 @click="deleteWorkspace(ws.id)"
                 variant="danger"
                 size="sm"
@@ -557,22 +565,32 @@ const stats = computed(() => [
                     >API Gateway</label
                   >
                   <div>
-                    <Button
-                      @click="openSettingsModal(ws.servers[0])"
-                      variant="ghost"
-                      size="sm"
-                      :class="
-                        cn(
-                          '!h-6 !px-2 !text-[10px] !rounded-md !font-bold',
-                          ws.servers[0].n8nApiKey
-                            ? 'text-primary'
-                            : 'text-amber-500 animate-pulse bg-amber-500/10',
-                        )
-                      "
-                    >
-                      <Key class="size-3 mr-1.5" />
-                      {{ ws.servers[0].n8nApiKey ? "LINKED" : "KEY REQUIRED" }}
-                    </Button>
+                    <template v-if="ws.isPublic">
+                      <div
+                        class="flex items-center gap-1.5 text-[10px] font-bold text-primary px-2 py-1 bg-primary/5 rounded-md w-fit"
+                      >
+                        <Key class="size-3" />
+                        SECURED
+                      </div>
+                    </template>
+                    <template v-else>
+                      <Button
+                        @click="openSettingsModal(ws.servers[0])"
+                        variant="ghost"
+                        size="sm"
+                        :class="
+                          cn(
+                            '!h-6 !px-2 !text-[10px] !rounded-md !font-bold',
+                            ws.servers[0].n8nApiKey
+                              ? 'text-primary'
+                              : 'text-amber-500 animate-pulse bg-amber-500/10',
+                          )
+                        "
+                      >
+                        <Key class="size-3 mr-1.5" />
+                        {{ ws.servers[0].n8nApiKey ? "LINKED" : "KEY REQUIRED" }}
+                      </Button>
+                    </template>
                     <p
                       v-if="bootingServers.has(ws.servers[0].id)"
                       class="text-[9px] text-blue-400 font-bold mt-1.5 animate-pulse uppercase tracking-wider"
@@ -607,7 +625,7 @@ const stats = computed(() => [
 
           <!-- Server Actions Grid -->
           <div
-            v-if="ws.servers?.[0]"
+            v-if="ws.servers?.[0] && !ws.isPublic"
             class="grid grid-cols-2 gap-2 border-t md:border-t-0 md:border-l border-outline-variant/10 pt-8 md:pt-0 md:pl-12 w-full md:w-80 shrink-0"
           >
             <Button

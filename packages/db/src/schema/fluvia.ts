@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, pgEnum, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, pgEnum, jsonb, index, boolean } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
 export const serverStatusEnum = pgEnum("server_status", [
@@ -46,6 +46,7 @@ export const workspace = pgTable(
     agencyId: text("agency_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    isPublic: boolean("is_public").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

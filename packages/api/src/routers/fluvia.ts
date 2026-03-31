@@ -8,7 +8,7 @@ import { N8NService } from "../services/n8n";
 import { N8NBuilder } from "../lib/n8n-builder";
 import { ORPCError } from "@orpc/server";
 import { generateText } from "ai";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure } from "../index";
 import { SHORT_SYSTEM_PROMPT as SYSTEM_PROMPT } from "../const";
@@ -24,7 +24,7 @@ export const fluviaRouter = {
       .handler(async ({ context, input }) => {
         const userId = context.session.user.id;
         const workspaces = await db.query.workspace.findMany({
-          where: eq(workspace.agencyId, userId),
+          where: or(eq(workspace.agencyId, userId), eq(workspace.isPublic, true)),
           with: {
             servers: {
               with: {
@@ -174,7 +174,7 @@ export const fluviaRouter = {
             vps = await CubePathService.createVps({
               label: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
               name: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
-              plan_name: "gp.nano",
+              plan_name: "gp.micro",
               template_name: "n8n",
               location_name: "us-hou-1",
               password: password,
@@ -269,7 +269,7 @@ export const fluviaRouter = {
           .update(server)
           .set({ status: "restarting", updatedAt: new Date() })
           .where(eq(server.id, input.id));
-        await CubePathService.powerControlVps(srv.cubePathId, "restart_vps");
+        await CubePathService.powerControlVps(srv.cubePathId, "reboot_vps");
 
         return { success: true };
       }),
