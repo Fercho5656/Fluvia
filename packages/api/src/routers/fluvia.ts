@@ -17,6 +17,22 @@ const openrouter = createOpenRouter({
   apiKey: env.OPENROUTER_API_KEY,
 });
 
+/**
+ * Normalizes a string to be CubePath/Linux compatible:
+ * - Lowercase
+ * - Spaces/Underscores to hyphens
+ * - Remove non-alphanumeric (except hyphens)
+ */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, "-") // spaces/underscores to hyphens
+    .replace(/[^a-z0-9-]/g, "") // remove invalid chars
+    .replace(/-+/g, "-") // collapse multiple hyphens
+    .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+}
+
 export const fluviaRouter = {
   workspace: {
     list: protectedProcedure
@@ -166,6 +182,10 @@ export const fluviaRouter = {
         const password = CubePathService.generateRandomPassword();
         const passwordHash = CubePathService.hashPassword(password);
 
+        const safeWorkspaceName = normalizeName(input.workspaceName);
+        const uniqueSuffix = id.slice(0, 8);
+        const vpsName = `n8n-${safeWorkspaceName}-${uniqueSuffix}`.slice(0, 60);
+
         const maxRetries = 3;
         let vps: any;
         let lastError: any;
@@ -173,8 +193,8 @@ export const fluviaRouter = {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
             vps = await CubePathService.createVps({
-              label: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
-              name: `n8n-${input.workspaceName}-${id.slice(0, 8)}`,
+              label: vpsName,
+              name: vpsName,
               plan_name: "gp.micro",
               template_name: "n8n",
               location_name: "us-hou-1",
